@@ -9,7 +9,7 @@ Marketplace connecting people who need a service with local workers — listings
 ## Stack
 
 | Layer | Tech | Hosted on |
-|---|---|---|
+| --- | --- | --- |
 | `frontend/` | Next.js 16 (App Router, React 19, TypeScript, Tailwind, i18next) | Vercel |
 | `backend/` | Node 24, Express 5, `pg`, Stripe, Nodemailer/Resend, web-push | Render |
 | `supabase/` | Postgres 17, Auth, Storage (Supabase) | Supabase |
@@ -30,10 +30,24 @@ cp frontend/.env.example frontend/.env.local  # fill in
 docker compose up --build
 ```
 
-- Frontend → http://localhost:3000
-- Backend → http://localhost:5000 (health: `/api/health`)
+- Frontend → <http://localhost:3000>
+- Backend → <http://localhost:5000> (health: `/api/health`)
 
 `docker compose down` stops everything. The frontend container waits for the backend health check before starting.
+
+### Option A′ — Docker + local Supabase (isolated database)
+
+Same as above, but against a throwaway Supabase running on your machine (Postgres, Auth, Storage, Studio) built from [`supabase/migrations/`](supabase/migrations/). No production data is touched — ideal for testing payments, signups or destructive changes.
+
+```bash
+npx supabase start                 # first run downloads ~1.5 GB of images
+sh scripts/make-local-env.sh       # frontend/.env.local → .env.supabase-local (local URL/key)
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+```
+
+- Studio (DB browser) → <http://localhost:54323>
+- Mailpit (catches every email the app sends) → <http://localhost:54324>
+- `npx supabase stop` shuts the stack down; `npx supabase db reset` rebuilds it from the migrations.
 
 ### Option B — Node
 
@@ -70,7 +84,7 @@ cd frontend && npx playwright test # E2E — needs a running app + test accounts
 Everything runs on GitHub Actions on every push and pull request to `main`:
 
 | Workflow | What it does |
-|---|---|
+| --- | --- |
 | [`test.yml`](.github/workflows/test.yml) | Vitest (backend, frontend) + ESLint |
 | [`docker.yml`](.github/workflows/docker.yml) | Builds both images with layer caching; on `main`, pushes `ghcr.io/uneden/uneden-backend` and `ghcr.io/uneden/uneden-frontend` tagged `latest` + commit SHA |
 | CodeQL / Dependabot | Static analysis and dependency updates (GitHub-managed) |
@@ -86,7 +100,7 @@ Both images are multi-stage, run as the unprivileged `node` user, and expose a `
 
 ## Project layout
 
-```
+```text
 .
 ├── backend/            Express API
 │   ├── src/            controllers, routes, services, jobs, middleware
@@ -97,7 +111,9 @@ Both images are multi-stage, run as the unprivileged `node` user, and expose a `
 │   ├── src/components/
 │   ├── tests/          Playwright E2E
 │   └── Dockerfile
-├── supabase/           database migrations
+├── supabase/           config.toml + migrations (baseline) + migrations_archive
+├── scripts/            dev helpers
+├── docker-compose.local.yml   override: point the stack at local Supabase
 ├── dashboard/          admin CLI
 ├── docker-compose.yml
 └── .github/workflows/  CI

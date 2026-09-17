@@ -1,0 +1,30 @@
+# Run the app against the LOCAL Supabase stack instead of production.
+#
+#   npx supabase start                                        # once
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#
+# The keys below are the public demo credentials every local Supabase
+# instance ships with (see `npx supabase status`); they are not secrets.
+# host.docker.internal = the Windows/macOS host, where Supabase listens.
+
+services:
+  backend:
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:54322/postgres
+      SUPABASE_URL: http://host.docker.internal:54321
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+      SUPABASE_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
+      DATABASE_SSL: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    image: uneden-frontend:local
+
+# The browser talks to Supabase directly, so the frontend must be BUILT with
+# the local URL/key. frontend/.env.supabase-local is generated from .env.local
+# by scripts/make-local-env.sh and git-ignored like every .env file.
+secrets:
+  frontend_env:
+    file: ./frontend/.env.supabase-local

@@ -1,0 +1,1 @@
+ALTER TABLE user_presence ADD COLUMN IF NOT EXISTS active_chat_id TEXT DEFAULT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE dispute_messages ENABLE ROW LEVEL SECURITY;

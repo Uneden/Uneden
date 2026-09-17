@@ -1,0 +1,1 @@
+ALTER TABLE chat_room_member ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false;
