@@ -4,5 +4,7 @@
 3f2ebd100f54542348fe399f9457d92460a4e41c:backend/.env:jwt:6
 5bfd225b948f08bb743502f5c1d56e23844f8737:backend/.env:generic-api-key:9
 34c16a0420d84a02a8ed0d0bbd463865f803dad5:backend/src/config/db.js:generic-api-key:12
-# Revoked service-role key embedded in a legacy DB trigger captured by the schema dump
+# Revoked service-role key inside the legacy "on-new-message-notify" trigger captured by the
+# initial schema dump. Trigger dropped in prod and removed from the baseline on 2026-09-17;
+# the commit that introduced the dump still carries it.
 32d4d6f8d5d0b4f3d1d8239258ac5d651ac2e243:supabase/migrations/20260917000000_baseline.sql:jwt:1708
