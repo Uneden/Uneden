@@ -1,0 +1,20 @@
+# Secrets: injected as a build secret / at runtime, never copied into the image
+.env*
+
+# Rebuilt inside the image
+node_modules
+.next
+out
+*.tsbuildinfo
+
+# Dev / test only
+tests
+playwright
+playwright-report
+test-results
+coverage
+.vercel
+.gitignore
+Dockerfile
+.dockerignore
+README.md

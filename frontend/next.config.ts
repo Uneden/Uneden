@@ -25,6 +25,9 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  // "standalone" emits a self-contained server (.next/standalone) for the Docker
+  // image. Only enabled from the Dockerfile so the Vercel build is untouched.
+  output: process.env.NEXT_OUTPUT_STANDALONE === "1" ? "standalone" : undefined,
   async headers() {
     return [{ source: "/(.*)", headers: SECURITY_HEADERS }];
   },
