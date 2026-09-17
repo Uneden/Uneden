@@ -1,3 +1,6 @@
 .env
 .env.*
 node_modules/
+
+# Keep the template
+!.env.example
