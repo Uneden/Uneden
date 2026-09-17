@@ -21,6 +21,9 @@ services:
 
   frontend:
     image: uneden-frontend:local
+    build:
+      args:
+        NEXT_IMAGES_UNOPTIMIZED: "1"
 
 # The browser talks to Supabase directly, so the frontend must be BUILT with
 # the local URL/key. frontend/.env.supabase-local is generated from .env.local

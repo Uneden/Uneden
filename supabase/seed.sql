@@ -70,9 +70,22 @@ FROM auth.users u
 WHERE u.email IN ('seller@test.local', 'buyer@test.local')
 ON CONFLICT (provider_id, provider) DO NOTHING;
 
--- Skip the onboarding flow for both accounts.
+-- Skip the onboarding flow for both accounts: the app gates most pages until
+-- the "required" profile fields (steps 1-3) are filled. Profile data is read
+-- from public.users; public.profiles is kept in sync for consistency.
 UPDATE public.users
-SET profile_completed = true
+SET profile_completed = true,
+    phone       = '+1 514 555 0100',
+    address     = '1 Rue Test',
+    city        = 'Montréal',
+    province    = 'QC',
+    postal_code = 'H2X 1Y4',
+    profession  = 'Cleaner',
+    skills      = '["Ménage", "Entretien"]'::jsonb
+WHERE email IN ('seller@test.local', 'buyer@test.local');
+
+UPDATE public.profiles
+SET phone = '+1 514 555 0100', city = 'Montréal', province = 'QC', postal_code = 'H2X 1Y4', profession = 'Cleaner'
 WHERE email IN ('seller@test.local', 'buyer@test.local');
 
 -- ---------------------------------------------------------------------------

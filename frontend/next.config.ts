@@ -72,6 +72,8 @@ const nextConfig: NextConfig = {
     ];
   },
   images: {
+    // Test builds (CI, local compose) skip sharp: faster and avoids optimizer stalls.
+    unoptimized: process.env.NEXT_IMAGES_UNOPTIMIZED === "1",
     formats: ['image/webp'],
     deviceSizes: [390, 640, 828, 1080, 1200],
     remotePatterns: [

@@ -76,7 +76,8 @@ Templates with every key and a short comment:
 cd backend  && npm run test:unit   # Vitest
 cd frontend && npm run test:unit   # Vitest
 cd frontend && npm run lint        # ESLint (next/core-web-vitals + TS)
-cd frontend && npx playwright test # E2E — needs a running app + test accounts in frontend/.env.test
+cd frontend && npx playwright test # E2E — needs a running app + accounts in frontend/.env.test
+#   against local Supabase: cp .env.test.example .env.test (matches supabase/seed.sql)
 ```
 
 ## CI / CD
@@ -86,6 +87,7 @@ Everything runs on GitHub Actions on every push and pull request to `main`:
 | Workflow | What it does |
 | --- | --- |
 | [`test.yml`](.github/workflows/test.yml) | Vitest (backend, frontend) + ESLint |
+| [`e2e.yml`](.github/workflows/e2e.yml) | Playwright end-to-end: local Supabase (migrations + seed) → backend → frontend → 98 tests, report uploaded as artifact. Stripe flow and a few outdated specs are excluded (see the workflow comment) |
 | [`docker.yml`](.github/workflows/docker.yml) | Builds both images with layer caching; on `main`, pushes `ghcr.io/uneden/uneden-backend` and `ghcr.io/uneden/uneden-frontend` tagged `latest` + commit SHA |
 | CodeQL / Dependabot | Static analysis and dependency updates (GitHub-managed) |
 

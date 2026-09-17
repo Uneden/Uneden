@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const USER_ID = '975a5680-cf13-4500-b2db-795b0b5cbe1a';
+// Seller account id: seeded value locally (supabase/seed.sql), production id otherwise.
+const USER_ID = process.env.TEST_USER_ID || '975a5680-cf13-4500-b2db-795b0b5cbe1a';
 
 test.describe('Profile page', () => {
   test('own profile loads without error', async ({ page }) => {

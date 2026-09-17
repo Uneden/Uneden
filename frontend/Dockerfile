@@ -14,8 +14,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# 1 = build without image optimisation (test builds only, see docker-compose.local.yml)
+ARG NEXT_IMAGES_UNOPTIMIZED=0
+
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXT_OUTPUT_STANDALONE=1 \
+    NEXT_IMAGES_UNOPTIMIZED=$NEXT_IMAGES_UNOPTIMIZED \
     # Empty token = Sentry plugin skips source-map upload for local images
     SENTRY_AUTH_TOKEN=""
 
