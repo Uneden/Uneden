@@ -19,7 +19,7 @@ test.describe('Post a listing', () => {
     await page.waitForLoadState('networkidle');
     await skipIfPostingUnavailable(page);
     // Two toggle buttons for offer / looking modes
-    const buttons = page.locator('button[type="button"]').filter({ hasText: /offer|offre|looking|cherche/i });
+    const buttons = page.locator('button[type="button"]').filter({ hasText: /offer|offr|looking|cherche/i });
     await expect(buttons.first()).toBeVisible({ timeout: 10000 });
   });
 
@@ -31,7 +31,7 @@ test.describe('Post a listing', () => {
     await lookingBtn.click();
     await expect(lookingBtn).toHaveClass(/bg-green-700/);
 
-    const offerBtn = page.locator('button[type="button"]').filter({ hasText: /offer|offre/i }).first();
+    const offerBtn = page.locator('button[type="button"]').filter({ hasText: /offer|offr/i }).first();
     await offerBtn.click();
     await expect(offerBtn).toHaveClass(/bg-green-700/);
   });

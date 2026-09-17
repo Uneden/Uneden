@@ -6,7 +6,7 @@ test.describe('Post listing complete flow', () => {
     await page.waitForLoadState('networkidle');
 
     // Select "offer" mode (default)
-    const offerBtn = page.locator('button[type="button"]').filter({ hasText: /offer|offre/i }).first();
+    const offerBtn = page.locator('button[type="button"]').filter({ hasText: /offer|offr/i }).first();
     await offerBtn.click();
 
     // Fill title
