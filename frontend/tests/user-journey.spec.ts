@@ -24,6 +24,9 @@ import { test, expect, chromium } from '@playwright/test';
 import path from 'path';
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
+// Profiles live at /profile/<id> (no bare /profile route). Ids match supabase/seed.sql locally.
+const SELLER_ID = process.env.TEST_USER_ID;
+const BUYER_ID = process.env.TEST_USER_ID_2;
 const authFile2 = path.join(__dirname, '../playwright/.auth/user2.json');
 
 // ─── Helper : ouvre un contexte Buyer (user2) ───────────────────────────────
@@ -40,33 +43,41 @@ async function getBuyerPage() {
 test.describe('1. Inscription', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('le formulaire affiche tous les champs requis', async ({ page }) => {
+  // The form has two steps: email first, then names + password.
+  async function goToPasswordStep(page: import('@playwright/test').Page, email: string) {
     await page.goto('/register');
-    await expect(page.locator('#full_name')).toBeVisible();
-    await expect(page.locator('#email')).toBeVisible();
+    await page.fill('#email', email);
+    await page.click('button[type="submit"]');
+    await page.waitForSelector('#password', { timeout: 15000 });
+  }
+
+  test('le formulaire affiche tous les champs requis', async ({ page }) => {
+    await goToPasswordStep(page, 'test_fields@example.com');
+    await expect(page.locator('#first_name')).toBeVisible();
+    await expect(page.locator('#last_name')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();
     await expect(page.locator('#confirm_password')).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
   test('erreur si les mots de passe ne correspondent pas', async ({ page }) => {
-    await page.goto('/register');
-    await page.fill('#full_name', 'Test Utilisateur');
-    await page.fill('#email', 'test_mismatch@example.com');
+    await goToPasswordStep(page, 'test_mismatch@example.com');
+    await page.fill('#first_name', 'Test');
+    await page.fill('#last_name', 'Utilisateur');
     await page.fill('#password', 'Password123!');
     await page.fill('#confirm_password', 'Different123!');
     await page.click('button[type="submit"]');
     await expect(page.locator('.bg-red-50').first()).toBeVisible({ timeout: 5000 });
   });
 
-  test('erreur si le mot de passe est trop court', async ({ page }) => {
-    await page.goto('/register');
-    await page.fill('#full_name', 'Test Utilisateur');
-    await page.fill('#email', 'test_short@example.com');
+  test('le bouton reste désactivé si le mot de passe est trop court', async ({ page }) => {
+    await goToPasswordStep(page, 'test_short@example.com');
+    await page.fill('#first_name', 'Test');
+    await page.fill('#last_name', 'Utilisateur');
     await page.fill('#password', 'abc');
     await page.fill('#confirm_password', 'abc');
-    await page.click('button[type="submit"]');
-    await expect(page.locator('.bg-red-50').first()).toBeVisible({ timeout: 5000 });
+    // Submit is gated on password.length >= 8, so the form cannot be sent
+    await expect(page.locator('button[type="submit"]')).toBeDisabled();
   });
 
   test('lien vers la page de connexion présent', async ({ page }) => {
@@ -76,8 +87,8 @@ test.describe('1. Inscription', () => {
 
   test('page de choix du type de compte accessible', async ({ page }) => {
     await page.goto('/choose_type');
-    await expect(page.locator('a[href*="type=person"]')).toBeVisible();
-    await expect(page.locator('a[href*="type=company"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Particulier|Individual/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Entreprise|Company/i })).toBeVisible();
   });
 });
 
@@ -245,8 +256,8 @@ test.describe('5. Détail d\'une annonce', () => {
     await expect(page).toHaveURL(/serviceDetail/, { timeout: 10000 });
     const heading = page.locator('h1, h2').first();
     await expect(heading).toBeVisible({ timeout: 15000 });
-    // Price is rendered as "50.00 $" inside the ServiceTitleCard
-    const price = page.locator('p.font-extrabold').first();
+    // Price is rendered as "40.00 $" in a bold green <p> inside the ServiceTitleCard
+    const price = page.locator('p.font-bold.text-green-700').first();
     await expect(price).toBeVisible({ timeout: 10000 });
   });
 
@@ -449,46 +460,43 @@ test.describe('9. Wallet', () => {
 // 10. PROFIL UTILISATEUR
 // ═══════════════════════════════════════════════════════════════════════════════
 test.describe('10. Profil utilisateur', () => {
-  test('la page /profile se charge', async ({ page }) => {
-    await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+  test.beforeEach(() => {
+    test.skip(!SELLER_ID, 'TEST_USER_ID not set');
+  });
+
+  test('la page de profil du seller se charge', async ({ page }) => {
+    await page.goto(`/profile/${SELLER_ID}`);
     await expect(page).not.toHaveURL(/login/);
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 15000 });
   });
 
   test('affiche le nom ou avatar', async ({ page }) => {
-    await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.goto(`/profile/${SELLER_ID}`);
     const avatar = page.locator('img[alt], [class*="avatar"], [class*="Avatar"]').first();
     const nameEl = page.locator('h1, h2, h3').first();
-    const hasAvatar = await avatar.isVisible({ timeout: 5000 }).catch(() => false);
-    const hasName = await nameEl.isVisible({ timeout: 5000 }).catch(() => false);
-    expect(hasAvatar || hasName).toBe(true);
+    await expect(avatar.or(nameEl)).toBeVisible({ timeout: 15000 });
   });
 
-  test('affiche les annonces de l\'utilisateur ou un état vide', async ({ page }) => {
-    await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
-    const listings = page.locator('a[href*="/serviceDetail/"]');
-    const emptyState = page.locator('text=/aucune|no listing|pas d\'annonce/i');
-    const hasListings = await listings.count() > 0;
-    const hasEmpty = await emptyState.isVisible({ timeout: 5000 }).catch(() => false);
-    expect(hasListings || hasEmpty).toBe(true);
+  test("affiche les annonces de l'utilisateur ou un état vide", async ({ page }) => {
+    await page.goto(`/profile/${SELLER_ID}`);
+    const listings = page.locator('a[href*="/serviceDetail/"]').first();
+    const emptyState = page.locator("text=/aucune|no listing|pas d'annonce|hasn't posted|listings yet/i").first();
+    await expect(listings.or(emptyState)).toBeVisible({ timeout: 15000 });
   });
 
   test('/my-listings affiche les annonces du seller', async ({ page }) => {
     await page.goto('/my-listings');
-    await page.waitForLoadState('networkidle');
     await expect(page).not.toHaveURL(/login/);
-    const content = page.locator('main, body').first();
-    await expect(content).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('main, body').first()).toBeVisible({ timeout: 10000 });
   });
 
   test('(buyer) peut voir son propre profil', async () => {
+    test.skip(!BUYER_ID, 'TEST_USER_ID_2 not set');
     const { browser, page } = await getBuyerPage();
     try {
-      await page.goto(`${BASE}/profile`);
-      await page.waitForLoadState('networkidle');
+      await page.goto(`${BASE}/profile/${BUYER_ID}`);
       await expect(page).not.toHaveURL(/login/);
+      await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 15000 });
     } finally {
       await browser.close();
     }

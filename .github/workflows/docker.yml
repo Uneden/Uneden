@@ -21,6 +21,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write   # Trivy results → Security tab
 
     strategy:
       fail-fast: false
@@ -56,6 +57,8 @@ jobs:
         with:
           context: ./${{ matrix.service }}
           push: ${{ github.event_name == 'push' }}
+          # On PRs the image is not pushed; load it into the local daemon so it can be scanned.
+          load: ${{ github.event_name != 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Layer cache lives in GitHub Actions cache: npm ci is skipped
@@ -66,3 +69,32 @@ jobs:
           # BuildKit secret, so it never ends up in an image layer.
           secrets: |
             "frontend_env=${{ secrets.FRONTEND_ENV }}"
+
+      # ---- Vulnerability scan (Trivy) --------------------------------------
+      # 1) Fail the job on CRITICAL vulnerabilities that have a fix available.
+      - name: Trivy — fail on fixable CRITICAL
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      # 2) Full HIGH+CRITICAL report to GitHub code scanning (never fails the job).
+      - name: Trivy — SARIF report
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          exit-code: "0"
+
+      - name: Upload Trivy report
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}

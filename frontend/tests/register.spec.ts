@@ -65,12 +65,14 @@ test.describe('Choose account type page', () => {
     await page.getByRole('button', { name: /Particulier|Individual/i }).click();
     await expect(page.getByText(/Informations de base|Basic information/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Ignorer pour l'instant|Skip for now/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Allons-y|Let's go/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Suivant|Next|Let's go)$/i })).toBeVisible();
   });
 
-  test('shows account type title without card descriptions', async ({ page }) => {
+  test('shows account type title and subtitle', async ({ page }) => {
     await page.goto('/choose_type');
-    await expect(page.getByText(/De quel type de compte|What type of account/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /type de compte|account type/i })).toBeVisible();
     await expect(page.getByText(/n'influence pas|does not affect/i)).toBeVisible();
+    // Card descriptions are shown under each option
+    await expect(page.getByText(/Je cherche du travail|looking for work/i)).toBeVisible();
   });
 });

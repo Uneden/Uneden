@@ -40,7 +40,9 @@ test.describe('Post a listing', () => {
     await page.goto('/post');
     await page.waitForLoadState('networkidle');
     await skipIfPostingUnavailable(page);
-    // Title field has id="serviceTitle"
-    await expect(page.locator('#serviceTitle')).toBeVisible({ timeout: 10000 });
+    // Bilingual form: title input is identified by its placeholder, description by id
+    await expect(page.getByPlaceholder(/Nettoyage professionnel|Professional House Cleaning/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#desc-main')).toBeVisible();
+    await expect(page.locator('button[type="submit"]').first()).toBeVisible();
   });
 });
