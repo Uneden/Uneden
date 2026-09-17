@@ -16,6 +16,8 @@ export default defineConfig({
   timeout: 120000,
   use: {
     baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
+    // The suite asserts French UI text; Chromium defaults to en-US otherwise.
+    locale: 'fr-CA',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

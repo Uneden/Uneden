@@ -1,9 +1,10 @@
+import { SERVER_API_URL } from "@/lib/serverApiUrl";
 import HomePageClient, {
   type HomeCategoryCount,
   type HomeListing,
 } from "@/components/home/HomePageClient";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = SERVER_API_URL;
 
 async function fetchInitialListings(): Promise<HomeListing[]> {
   try {

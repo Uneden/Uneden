@@ -51,3 +51,4 @@ node_modules/
 
 # Keep the template
 !.env.example
+!.env.test.example

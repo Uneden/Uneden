@@ -1,6 +1,7 @@
+import { SERVER_API_URL } from "@/lib/serverApiUrl";
 import { MetadataRoute } from "next";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = SERVER_API_URL;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [

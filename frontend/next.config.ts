@@ -1,14 +1,27 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
+// A local Supabase (`npx supabase start`) lives on http://127.0.0.1:54321, which
+// the production CSP would block. Derive the extra origins from the configured
+// URL so nothing changes when it points at *.supabase.co.
+const LOCAL_SUPABASE_ORIGINS = (() => {
+  try {
+    const origin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin;
+    if (origin.endsWith(".supabase.co")) return "";
+    return ` ${origin} ${origin.replace(/^http/, "ws")}`;
+  } catch {
+    return "";
+  }
+})();
+
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://js.stripe.com https://connect-js.stripe.com https://maps.googleapis.com https://va.vercel-scripts.com https://pagead2.googlesyndication.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com",
-  "img-src 'self' data: https: blob: https://*.supabase.co https://images.unsplash.com https://maps.googleapis.com https://maps.gstatic.com",
+  `img-src 'self' data: https: blob: https://*.supabase.co https://images.unsplash.com https://maps.googleapis.com https://maps.gstatic.com${LOCAL_SUPABASE_ORIGINS}`,
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://uneden.onrender.com http://localhost:5000 https://va.vercel-scripts.com https://maps.googleapis.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://api.stripe.com https://connect-js.stripe.com",
-  "media-src 'self' blob: https://*.supabase.co",
+  `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://uneden.onrender.com http://localhost:5000 https://va.vercel-scripts.com https://maps.googleapis.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://api.stripe.com https://connect-js.stripe.com${LOCAL_SUPABASE_ORIGINS}`,
+  `media-src 'self' blob: https://*.supabase.co${LOCAL_SUPABASE_ORIGINS}`,
   "frame-src https://js.stripe.com https://connect-js.stripe.com https://www.google.com/maps/embed/",
   "object-src 'none'",
   "worker-src 'self' blob:",

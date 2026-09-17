@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { verifySupabaseJwt } from "../lib/supabaseJwt.js";
 import pool from "../config/db.js";
 
 // Simple in-memory cache for suspended status (TTL: 2 minutes)
@@ -38,10 +39,10 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: "Not authorized, no token" });
     }
 
-    // Verify JWT locally using Supabase JWT secret — zero egress, no API call
+    // HS256: verified locally with the shared secret. ES256: public key from JWKS (cached).
     let payload;
     try {
-      payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
+      payload = await verifySupabaseJwt(token);
     } catch {
       return res.status(401).json({ message: "Invalid or expired token" });
     }
@@ -114,7 +115,7 @@ export const optionalProtect = async (req, res, next) => {
     }
     let payload;
     try {
-      payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
+      payload = await verifySupabaseJwt(token);
     } catch {
       return next();
     }

@@ -1,9 +1,10 @@
+import { SERVER_API_URL } from "@/lib/serverApiUrl";
 import { Metadata } from "next";
 import ServiceDetailClient from "./ServiceDetailClient";
 import { getSafeMetadataImageUrl } from "@/lib/image";
 import { listingMetaPriceSegment } from "@/lib/listingPrice";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = SERVER_API_URL;
 
 interface Props {
   params: Promise<{ id: string }>;

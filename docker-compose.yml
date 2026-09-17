@@ -22,6 +22,9 @@ services:
         - frontend_env
     image: uneden-frontend
     env_file: ./frontend/.env.local
+    environment:
+      # Server-side fetches reach the backend over the compose network
+      API_URL_INTERNAL: http://backend:5000/api
     ports:
       - "3000:3000"
     depends_on:
