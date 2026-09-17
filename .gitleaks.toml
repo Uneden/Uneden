@@ -1,0 +1,20 @@
+# Gitleaks configuration — https://github.com/gitleaks/gitleaks
+# Extends the default ruleset; only adds allowlists for values that look like
+# secrets but are public by construction.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secrets"
+regexes = [
+  # JWTs of the local Supabase stack (issuer "supabase-demo"): identical on every machine, printed by `supabase status`
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIi''',
+  # CI placeholders for SDKs that are never called
+  '''(sk|pk)_test_placeholder''',
+  '''whsec_placeholder''',
+  # Seeded test accounts (supabase/seed.sql, frontend/.env.test.example)
+  '''Test-(seller|buyer)-1234''',
+  # Local Supabase demo JWT secret
+  '''super-secret-jwt-token-with-at-least-32-characters-long''',
+]

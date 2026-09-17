@@ -1,0 +1,8 @@
+# Historical findings, reviewed on 2026-09-17. All credentials below were rotated;
+# the files no longer exist at HEAD. Format: <commit>:<file>:<rule>:<line>
+3f2ebd100f54542348fe399f9457d92460a4e41c:backend/.env:jwt:5
+3f2ebd100f54542348fe399f9457d92460a4e41c:backend/.env:jwt:6
+5bfd225b948f08bb743502f5c1d56e23844f8737:backend/.env:generic-api-key:9
+34c16a0420d84a02a8ed0d0bbd463865f803dad5:backend/src/config/db.js:generic-api-key:12
+# Revoked service-role key embedded in a legacy DB trigger captured by the schema dump
+32d4d6f8d5d0b4f3d1d8239258ac5d651ac2e243:supabase/migrations/20260917000000_baseline.sql:jwt:1708
