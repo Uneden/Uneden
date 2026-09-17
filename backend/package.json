@@ -7,7 +7,8 @@
     "test": "node tests/security.test.js",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon --import ./src/instrument.js src/server.js",
+    "start": "node --import ./src/instrument.js src/server.js"
   },
   "keywords": [],
   "author": "",

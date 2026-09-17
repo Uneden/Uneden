@@ -70,7 +70,7 @@ jobs:
           EMAIL_PASSWORD: test
           RESEND_API_KEY: re_placeholder
         run: |
-          node src/server.js > ../backend.log 2>&1 &
+          npm start > ../backend.log 2>&1 &
           for i in $(seq 1 30); do
             curl -sf http://localhost:5000/api/health && break
             sleep 1
