@@ -3,6 +3,7 @@
 [![Unit Tests](https://github.com/Uneden/Uneden/actions/workflows/test.yml/badge.svg)](https://github.com/Uneden/Uneden/actions/workflows/test.yml)
 [![E2E Tests](https://github.com/Uneden/Uneden/actions/workflows/e2e.yml/badge.svg)](https://github.com/Uneden/Uneden/actions/workflows/e2e.yml)
 [![Docker Images](https://github.com/Uneden/Uneden/actions/workflows/docker.yml/badge.svg)](https://github.com/Uneden/Uneden/actions/workflows/docker.yml)
+[![Security](https://github.com/Uneden/Uneden/actions/workflows/security.yml/badge.svg)](https://github.com/Uneden/Uneden/actions/workflows/security.yml)
 [![CodeQL](https://github.com/Uneden/Uneden/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Uneden/Uneden/security/code-scanning)
 
 Marketplace connecting people who need a service with local workers: listings, booking requests with price negotiation, in-app messaging, Stripe payments (Connect payouts, deposits, refunds) and a dispute flow. Bilingual FR/EN. Live at [uneden.ca](https://www.uneden.ca).
@@ -128,9 +129,10 @@ Everything runs on GitHub Actions on every push and pull request to `main`:
 
 | Workflow | What it does |
 | --- | --- |
-| [`test.yml`](.github/workflows/test.yml) | Vitest (backend, frontend) + ESLint |
+| [`test.yml`](.github/workflows/test.yml) | Vitest (backend, frontend), ESLint, TypeScript typecheck |
 | [`e2e.yml`](.github/workflows/e2e.yml) | Playwright end-to-end: starts a local Supabase in the runner (migrations + seed), the backend and a production build of the frontend, runs the suite; HTML report + server logs uploaded as an artifact |
-| [`docker.yml`](.github/workflows/docker.yml) | Builds both images with layer caching; on `main`, pushes `ghcr.io/uneden/uneden-backend` and `ghcr.io/uneden/uneden-frontend` tagged `latest` + commit SHA |
+| [`docker.yml`](.github/workflows/docker.yml) | Builds both images with layer caching, scans them with Trivy (fails on fixable CRITICAL, HIGH+ reported to the Security tab); on `main`, pushes `ghcr.io/uneden/uneden-backend` and `ghcr.io/uneden/uneden-frontend` tagged `latest` + commit SHA |
+| [`security.yml`](.github/workflows/security.yml) | Gitleaks over the full git history (`.gitleaks.toml` whitelists the public local-Supabase demo keys) |
 | CodeQL / Dependabot | Static analysis and dependency updates (GitHub-managed) |
 
 Deploys are handled by the hosting platforms on push to `main` (Vercel for the frontend, Render for the backend).
