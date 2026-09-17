@@ -35,6 +35,14 @@ Marketplace connecting people who need a service with local workers: listings, b
 
 ## Run locally
 
+Which option to pick:
+
+| I want to… | Use |
+| --- | --- |
+| Try the app or check that everything works together | Option A (Docker) |
+| Test sign-ups, payments or schema changes without touching production | Option A′ (Docker + local Supabase) |
+| Write code with hot reload | Option B (Node) — usually with `npx supabase start` from A′ for an isolated database |
+
 ### Option A — Docker (recommended)
 
 Requires [Docker Desktop](https://docs.docker.com/desktop/).
@@ -65,9 +73,9 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 - Seeded accounts: `seller@test.local` / `Test-seller-1234` and `buyer@test.local` / `Test-buyer-1234`
 - `npx supabase stop` shuts the stack down; `npx supabase db reset` rebuilds it from the migrations + seed.
 
-### Option B — Node
+### Option B — Node (day-to-day development)
 
-Requires Node 24.
+Requires Node 24. Changes reload instantly; the Docker images are for running and testing, not for editing code.
 
 ```bash
 # terminal 1
@@ -76,6 +84,8 @@ cd backend && npm ci && npm run dev      # nodemon on :5000
 # terminal 2
 cd frontend && npm ci && npm run dev     # next dev on :3000
 ```
+
+To develop against the local Supabase instead of production, run `npx supabase start` and point `backend/.env` / `frontend/.env.local` at `http://127.0.0.1:54321` with the keys printed by `npx supabase status` (plus `DATABASE_SSL=false` in the backend).
 
 ## Environment variables
 
