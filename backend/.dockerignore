@@ -1,0 +1,15 @@
+# Secrets never go into the image; they are injected at runtime
+.env
+.env.*
+
+# Installed fresh inside the image
+node_modules
+
+# Dev-only material
+tests
+scripts
+migrations
+vitest.config.js
+.gitignore
+Dockerfile
+.dockerignore
