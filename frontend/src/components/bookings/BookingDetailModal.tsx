@@ -87,6 +87,7 @@ export interface BookingDetail {
   image_urls?: string[] | null;
   category: string | null;
   service_location: string | null;
+  service_description?: string | null;
   hide_exact_location?: boolean;
   location?: string | null;
   address?: string | null;
@@ -257,7 +258,11 @@ export default function BookingDetailModal({
   const { t, i18n } = useTranslation();
   useScrollLock(!embedded);
   const [booking, setBooking] = useState(initialBooking);
-  const [serviceDescription, setServiceDescription] = useState<string | null>(null);
+  // Comes with the booking row (joined in the bookings API), so it renders on first
+  // paint. The fetch below is only a fallback for rows loaded without the field.
+  const [serviceDescription, setServiceDescription] = useState<string | null>(
+    initialBooking.service_description ?? null
+  );
   const [updating, setUpdating] = useState(false);
   const [step, setStep] = useState<BookingStep>("detail");
   const [layoutMode, setLayoutMode] = useState<"review" | "dispute" | "payment" | "cancel">("review");
@@ -409,6 +414,7 @@ export default function BookingDetailModal({
   }, [closeLocked, step]);
 
   useEffect(() => {
+    if (initialBooking.service_description !== undefined) return;
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/services/${initialBooking.service_id}`)
       .then((r) => r.json())
       .then((s) => { if (s?.description) setServiceDescription(s.description); })

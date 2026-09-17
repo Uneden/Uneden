@@ -13,6 +13,7 @@ interface BookingBase {
   image_urls?: string[] | null;
   category: string | null;
   service_location: string | null;
+  service_description?: string | null;
   hide_exact_location?: boolean;
   location?: string | null;
   address?: string | null;

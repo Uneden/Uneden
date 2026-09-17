@@ -275,6 +275,7 @@ export const getMyBookings = async (req, res) => {
                 ELSE COALESCE(NULLIF(TRIM(s.address), ''), NULLIF(TRIM(s.location), ''), NULLIF(TRIM(s.city), ''))
               END AS service_location,
               s.is_one_time, s.type AS service_type,
+              s.description AS service_description,
               s.deposit_enabled AS service_deposit_enabled,
               s.deposit_type AS service_deposit_type,
               s.deposit_value AS service_deposit_value,
@@ -337,6 +338,7 @@ export const getReceivedBookings = async (req, res) => {
                 ELSE COALESCE(NULLIF(TRIM(s.address), ''), NULLIF(TRIM(s.location), ''), NULLIF(TRIM(s.city), ''))
               END AS service_location,
               s.is_one_time, s.type AS service_type,
+              s.description AS service_description,
               s.deposit_enabled AS service_deposit_enabled,
               s.deposit_type AS service_deposit_type,
               s.deposit_value AS service_deposit_value,
@@ -1270,6 +1272,7 @@ export const getBookingById = async (req, res) => {
                 ELSE COALESCE(NULLIF(TRIM(s.address), ''), NULLIF(TRIM(s.location), ''), NULLIF(TRIM(s.city), ''))
               END AS service_location,
               s.is_one_time, s.type AS service_type,
+              s.description AS service_description,
               s.deposit_enabled AS service_deposit_enabled,
               s.deposit_type AS service_deposit_type,
               s.deposit_value AS service_deposit_value,
@@ -1343,6 +1346,7 @@ export const getAdminBookingById = async (req, res) => {
               d.dispute_refund_percentage,
               COALESCE(NULLIF(TRIM(s.address), ''), NULLIF(TRIM(s.location), ''), NULLIF(TRIM(s.city), '')) AS service_location,
               s.is_one_time, s.type AS service_type,
+              s.description AS service_description,
               s.deposit_enabled AS service_deposit_enabled,
               s.deposit_type AS service_deposit_type,
               s.deposit_value AS service_deposit_value,
