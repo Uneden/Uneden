@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { Loader2, Send, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -198,9 +199,9 @@ export default function ComingSoonOverlay() {
 
             {/* Language switcher */}
             <div className="flex items-center justify-center gap-3 mt-5 sm:mt-6 text-xs text-gray-400">
-              <a href="/" className={`hover:text-green-700 transition-colors ${lang === "en" ? "font-semibold text-green-700" : ""}`}>English</a>
+              <Link href="/" className={`hover:text-green-700 transition-colors ${lang === "en" ? "font-semibold text-green-700" : ""}`}>English</Link>
               <span>·</span>
-              <a href="/fr" className={`hover:text-green-700 transition-colors ${lang === "fr" ? "font-semibold text-green-700" : ""}`}>Français</a>
+              <Link href="/fr" className={`hover:text-green-700 transition-colors ${lang === "fr" ? "font-semibold text-green-700" : ""}`}>Français</Link>
             </div>
           </div>
         </div>

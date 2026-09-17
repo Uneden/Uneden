@@ -9,7 +9,7 @@ export function decimalHoursFromParts(hours: number, minutes: number): number {
 export function partsFromDecimalHours(total: number): HoursMinutes {
   const safe = Math.max(0, Number(total) || 0);
   const hours = Math.floor(safe);
-  let minutes = Math.round((safe - hours) * 60);
+  const minutes = Math.round((safe - hours) * 60);
   if (minutes === 60) return { hours: hours + 1, minutes: 0 };
   return { hours, minutes };
 }
