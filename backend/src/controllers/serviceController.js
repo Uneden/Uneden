@@ -15,6 +15,7 @@ import {
   canonServiceFieldsInPlace,
   normalizeAvailability,
   normalizeMobility,
+  serviceTextLengthError,
 } from "../utils/serviceFieldCanonical.js";
 import { normalizeDurationForStorage } from "../utils/serviceDuration.js";
 import { resolveServicePricingFields } from "../utils/servicePricing.js";
@@ -174,6 +175,19 @@ export const createService = async (req, res) => {
     }
     const primaryLoc = primaryLocationFields(locationsParsed.locations);
 
+    const textFields = {
+      poster_type: poster_type || null,
+      availability: normalizeAvailability(availability) || null,
+      language: language || null,
+      mobility: normalizeMobility(mobility) || null,
+      duration: normalizeDurationForStorage(duration),
+      urgency: urgency || null,
+    };
+    const textError = serviceTextLengthError(textFields);
+    if (textError) {
+      return res.status(400).json({ message: textError });
+    }
+
     // Créer le service
     const result = await pool.query(
       `INSERT INTO services (
@@ -203,12 +217,12 @@ export const createService = async (req, res) => {
         primaryLoc.latitude,
         primaryLoc.longitude,
         primaryLoc.city,
-        poster_type || null,
-        normalizeAvailability(availability) || null,
-        language || null,
-        normalizeMobility(mobility) || null,
-        normalizeDurationForStorage(duration),
-        urgency || null,
+        textFields.poster_type,
+        textFields.availability,
+        textFields.language,
+        textFields.mobility,
+        textFields.duration,
+        textFields.urgency,
         resolvedImageUrl,
         resolvedImageUrls,
         is_one_time === true || is_one_time === "true" ? true : false,
@@ -1047,6 +1061,19 @@ export const updateService = async (req, res) => {
       mergedCity = primaryLoc.city;
     }
 
+    const textFields = {
+      poster_type: poster_type !== undefined ? poster_type : existing.poster_type,
+      availability: availability !== undefined ? normalizeAvailability(availability) : existing.availability,
+      language: language !== undefined ? language : existing.language,
+      mobility: mobility !== undefined ? normalizeMobility(mobility) : existing.mobility,
+      duration: duration !== undefined ? normalizeDurationForStorage(duration) : existing.duration,
+      urgency: urgency !== undefined ? urgency : existing.urgency,
+    };
+    const textError = serviceTextLengthError(textFields);
+    if (textError) {
+      return res.status(400).json({ message: textError });
+    }
+
     const updated = await pool.query(
       `UPDATE services
        SET title        = $1,
@@ -1098,12 +1125,12 @@ export const updateService = async (req, res) => {
         mergedLatitude,
         mergedLongitude,
         mergedCity,
-        poster_type  !== undefined ? poster_type  : existing.poster_type,
-        availability !== undefined ? normalizeAvailability(availability) : existing.availability,
-        language     !== undefined ? language     : existing.language,
-        mobility     !== undefined ? normalizeMobility(mobility) : existing.mobility,
-        duration     !== undefined ? normalizeDurationForStorage(duration) : existing.duration,
-        urgency      !== undefined ? urgency      : existing.urgency,
+        textFields.poster_type,
+        textFields.availability,
+        textFields.language,
+        textFields.mobility,
+        textFields.duration,
+        textFields.urgency,
         updResolvedUrl,
         updResolvedUrls,
         is_one_time          !== undefined ? (is_one_time === true || is_one_time === "true") : existing.is_one_time,

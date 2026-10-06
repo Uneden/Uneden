@@ -657,7 +657,7 @@
     "adjustImage": "Ajuster l'image",
     "saveImage": "Sauvegarder",
     "uploadImageTypeError": "Veuillez télécharger une image.",
-    "uploadImageSizeError": "La taille du fichier doit être inférieure à 5 Mo.",
+    "uploadImageSizeError": "La taille du fichier doit être inférieure à 20 Mo.",
     "cropImageError": "Échec du recadrage. Veuillez réessayer.",
     "uploadImageError": "Échec du téléversement de l'image. Veuillez réessayer.",
     "uploadServiceImage": "Image du service",

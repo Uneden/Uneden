@@ -1,44 +1,8 @@
 import pool from "../config/db.js";
+import { validateBillingAddressInput } from "../utils/billingAddress.js";
+import { isValidUUID } from "../utils/validate.js";
 
 const MAX_ADDRESSES = 2;
-const PROVINCE_NAME_TO_CODE = {
-  alberta: "AB",
-  "british columbia": "BC",
-  "colombie-britannique": "BC",
-  manitoba: "MB",
-  "new brunswick": "NB",
-  "nouveau-brunswick": "NB",
-  "newfoundland and labrador": "NL",
-  "terre-neuve-et-labrador": "NL",
-  "nova scotia": "NS",
-  "nouvelle-ecosse": "NS",
-  "nouvelle-écosse": "NS",
-  "northwest territories": "NT",
-  "territoires du nord-ouest": "NT",
-  nunavut: "NU",
-  ontario: "ON",
-  "prince edward island": "PE",
-  "ile-du-prince-edouard": "PE",
-  "île-du-prince-édouard": "PE",
-  quebec: "QC",
-  "québec": "QC",
-  saskatchewan: "SK",
-  yukon: "YT",
-};
-
-function normalizePostalCode(postalCode) {
-  if (!postalCode) return null;
-  const compact = String(postalCode).replace(/\s+/g, "").toUpperCase().slice(0, 6);
-  if (!compact) return null;
-  return compact.length > 3 ? `${compact.slice(0, 3)} ${compact.slice(3)}` : compact;
-}
-
-function normalizeProvinceCode(province) {
-  if (!province) return null;
-  const upper = String(province).toUpperCase();
-  if (upper.length === 2) return upper;
-  return PROVINCE_NAME_TO_CODE[String(province).toLowerCase()] ?? upper;
-}
 
 function getDefaultBillingName(user) {
   return user.account_type === "company"
@@ -71,12 +35,21 @@ async function getOrBootstrapBillingAddresses(userId) {
     return [];
   }
 
-  const normalizedProvince = normalizeProvinceCode(profile.province);
-  const normalizedPostalCode = normalizePostalCode(profile.postal_code);
-
-  if (!profile.address || !profile.city || !normalizedProvince) {
+  const { error, data } = validateBillingAddressInput(
+    {
+      full_name: getDefaultBillingName(profile),
+      address_line1: profile.address,
+      city: profile.city,
+      province: profile.province,
+    },
+    { partial: true },
+  );
+  // Incomplete or unusable profile address (unknown province, too long for the
+  // columns): the buyer enters a billing address at checkout instead.
+  if (error || !data.address_line1 || !data.city || !data.province) {
     return [];
   }
+  const postal = validateBillingAddressInput({ postal_code: profile.postal_code }, { partial: true });
 
   const inserted = await pool.query(
     `INSERT INTO billing_addresses (user_id, label, full_name, address_line1, city, province, postal_code, is_default)
@@ -85,11 +58,11 @@ async function getOrBootstrapBillingAddresses(userId) {
     [
       userId,
       "Domicile",
-      getDefaultBillingName(profile),
-      profile.address,
-      profile.city,
-      normalizedProvince,
-      normalizedPostalCode ?? "",
+      data.full_name ?? null,
+      data.address_line1,
+      data.city,
+      data.province,
+      postal.data.postal_code ?? "",
     ]
   );
 
@@ -110,11 +83,10 @@ export const getBillingAddresses = async (req, res) => {
 export const createBillingAddress = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { label, full_name, address_line1, city, province, postal_code, is_default } = req.body;
-    const normalizedPostalCode = normalizePostalCode(postal_code);
-
-    if (!address_line1 || !city || !province) {
-      return res.status(400).json({ message: "address_line1, city and province are required" });
+    const { is_default } = req.body;
+    const { error, data } = validateBillingAddressInput(req.body);
+    if (error) {
+      return res.status(400).json({ message: error });
     }
 
     // Enforce max 2 addresses
@@ -141,7 +113,7 @@ export const createBillingAddress = async (req, res) => {
       `INSERT INTO billing_addresses (user_id, label, full_name, address_line1, city, province, postal_code, is_default)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, label, full_name, address_line1, city, province, postal_code, is_default, created_at`,
-      [userId, label ?? "Domicile", full_name ?? null, address_line1, city, province.toUpperCase(), normalizedPostalCode, shouldBeDefault]
+      [userId, data.label ?? "Domicile", data.full_name ?? null, data.address_line1, data.city, data.province, data.postal_code, shouldBeDefault]
     );
 
     res.status(201).json(result.rows[0]);
@@ -155,8 +127,14 @@ export const updateBillingAddress = async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    const { label, full_name, address_line1, city, province, postal_code, is_default } = req.body;
-    const normalizedPostalCode = normalizePostalCode(postal_code);
+    const { is_default } = req.body;
+    if (!isValidUUID(id)) {
+      return res.status(404).json({ message: "Address not found" });
+    }
+    const { error, data } = validateBillingAddressInput(req.body, { partial: true });
+    if (error) {
+      return res.status(400).json({ message: error });
+    }
 
     // Verify ownership
     const existing = await pool.query(
@@ -185,7 +163,7 @@ export const updateBillingAddress = async (req, res) => {
            is_default = COALESCE($7, is_default)
        WHERE id = $8 AND user_id = $9
        RETURNING id, label, full_name, address_line1, city, province, postal_code, is_default, created_at`,
-      [label, full_name, address_line1, city, province?.toUpperCase(), normalizedPostalCode, is_default, id, userId]
+      [data.label, data.full_name, data.address_line1, data.city, data.province, data.postal_code, is_default, id, userId]
     );
 
     res.json(result.rows[0]);
@@ -199,6 +177,9 @@ export const deleteBillingAddress = async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+    if (!isValidUUID(id)) {
+      return res.status(404).json({ message: "Address not found" });
+    }
 
     const result = await pool.query(
       "DELETE FROM billing_addresses WHERE id = $1 AND user_id = $2 RETURNING id, is_default",
@@ -210,12 +191,16 @@ export const deleteBillingAddress = async (req, res) => {
     }
 
     // If deleted address was default, assign default to the remaining address
+    // (Postgres has no ORDER BY/LIMIT on UPDATE: pick the row in a subquery).
     if (result.rows[0].is_default) {
       await pool.query(
         `UPDATE billing_addresses SET is_default = true
-         WHERE user_id = $1
-         ORDER BY created_at ASC
-         LIMIT 1`,
+         WHERE id = (
+           SELECT id FROM billing_addresses
+           WHERE user_id = $1
+           ORDER BY created_at ASC
+           LIMIT 1
+         )`,
         [userId]
       );
     }
@@ -231,24 +216,25 @@ export const setDefaultBillingAddress = async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+    if (!isValidUUID(id)) {
+      return res.status(404).json({ message: "Address not found" });
+    }
 
-    await pool.query(
-      "UPDATE billing_addresses SET is_default = false WHERE user_id = $1",
-      [userId]
-    );
-
+    // Single statement: an unknown id must not leave the user without a default.
     const result = await pool.query(
-      `UPDATE billing_addresses SET is_default = true
-       WHERE id = $1 AND user_id = $2
+      `UPDATE billing_addresses SET is_default = (id = $1)
+       WHERE user_id = $2
+         AND EXISTS (SELECT 1 FROM billing_addresses WHERE id = $1 AND user_id = $2)
        RETURNING id, label, full_name, address_line1, city, province, postal_code, is_default`,
       [id, userId]
     );
 
-    if (result.rows.length === 0) {
+    const selected = result.rows.find((row) => row.id === id);
+    if (!selected) {
       return res.status(404).json({ message: "Address not found" });
     }
 
-    res.json(result.rows[0]);
+    res.json(selected);
   } catch (err) {
     console.error("setDefaultBillingAddress error:", err);
     res.status(500).json({ message: "Failed to set default" });

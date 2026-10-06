@@ -3,6 +3,9 @@
  */
 export const PRICING_MODES = ["fixed", "range", "quote", "hourly"];
 
+/** Same cap as booking updates; services.estimated_hours is numeric(8,2). */
+export const MAX_ESTIMATED_HOURS = 1000;
+
 /**
  * @param {unknown} raw
  * @returns {"fixed"|"range"|"quote"}
@@ -83,6 +86,9 @@ export function resolveServicePricingFields(body, opts) {
     }
     if (rate > 1_000_000) return { error: "Hourly rate too high" };
     const estHours = num(body.estimated_hours ?? body.estimatedHours);
+    if (estHours !== undefined && estHours > MAX_ESTIMATED_HOURS) {
+      return { error: `Estimated hours must be at most ${MAX_ESTIMATED_HOURS}` };
+    }
     const estimated_hours =
       estHours !== undefined && !Number.isNaN(estHours) && estHours > 0 ? estHours : null;
     return {
