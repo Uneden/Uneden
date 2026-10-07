@@ -262,6 +262,9 @@
     "private": "Privée"
   },
   "bookings": {
+    "statusChangeConflict": "Cette réservation a changé entre-temps (acceptée, payée ou annulée). Elle a été actualisée.",
+    "statusChangeForbidden": "Vous ne pouvez pas effectuer cette action sur cette réservation.",
+    "statusChangeFailed": "Impossible de mettre à jour la réservation. Réessayez.",
     "title": "Mes réservations",
     "received": "Reçues",
     "sent": "Envoyées",

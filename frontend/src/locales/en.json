@@ -262,6 +262,9 @@
     "private": "Private"
   },
   "bookings": {
+    "statusChangeConflict": "This booking changed in the meantime (accepted, paid or cancelled). It has been refreshed.",
+    "statusChangeForbidden": "You can't do this on this booking.",
+    "statusChangeFailed": "Couldn't update the booking. Please try again.",
     "title": "My Bookings",
     "received": "Received",
     "sent": "Sent",

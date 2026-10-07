@@ -36,6 +36,7 @@ import { getIntlLocale } from "@/lib/locale";
 import { sanitizePlainText } from "@/lib/sanitize";
 import AppImage from "@/components/ui/AppImage";
 import { toast } from "sonner";
+import { bookingStatusErrorMessage } from "@/lib/bookingStatusError";
 import PaymentInlinePanel, {
   type PaymentInlinePanelHandle,
   type PaymentInlinePhase,
@@ -456,10 +457,17 @@ export default function BookingDetailModal({
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        toast.error(bookingStatusErrorMessage(res.status, body, t));
+        if (res.status === 409) refreshBookingFromApi();
+        return;
+      }
       const updated = await res.json();
       setBooking((prev) => ({ ...prev, ...updated }));
       onUpdated(booking.id, updated);
+    } catch {
+      toast.error(t("bookings.statusChangeFailed"));
     } finally { setUpdating(false); }
   };
 
