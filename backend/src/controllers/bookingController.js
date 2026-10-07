@@ -17,6 +17,7 @@ import {
   validateDepositAgainstPrice,
 } from "../utils/depositSchema.js";
 import { normalizePricingMode, MAX_ESTIMATED_HOURS } from "../utils/servicePricing.js";
+import { respondWithPaymentConflict, settlePendingPayments, withTransaction } from "../services/paymentGuards.js";
 import { resolveBookingHourlyRate } from "../utils/hourlyPayment.js";
 import {
   isNegotiablePricingMode,
@@ -389,8 +390,15 @@ export const updateBookingStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ["pending", "negotiating", "accepted", "active", "completed", "cancelled", "rejected"];
-    if (!validStatuses.includes(status)) {
+    // Only these moves are made through this endpoint; payment, completion and
+    // negotiation have their own. Anything else (e.g. rejecting a paid,
+    // in-progress booking) used to be accepted and left the client's money stuck.
+    const ALLOWED_FROM = {
+      accepted: ["pending"],
+      rejected: ["pending", "negotiating"],
+      cancelled: ["pending", "negotiating", "accepted"],
+    };
+    if (!ALLOWED_FROM[status]) {
       return res.status(400).json({ message: "Invalid booking status" });
     }
 
@@ -430,34 +438,48 @@ export const updateBookingStatus = async (req, res) => {
       }
     }
 
-    if (status === "cancelled") {
-      if (!["pending", "negotiating", "accepted"].includes(b.status)) {
-        return res.status(400).json({
-          message: "In-progress or completed bookings cannot be cancelled directly. Open a dispute instead.",
-        });
-      }
+    const unpaid = !b.payment_status || b.payment_status === "unpaid";
+    if (!ALLOWED_FROM[status].includes(b.status) || !unpaid) {
+      return res.status(409).json({
+        message: status === "cancelled"
+          ? "In-progress or completed bookings cannot be cancelled directly. Open a dispute instead."
+          : `A ${b.status} booking cannot be ${status}`,
+      });
     }
 
-    if (status === "active" || status === "completed" || status === "pending") {
-      return res.status(403).json({ message: "This status transition is not allowed via this endpoint" });
+    // Rejecting or cancelling ends the booking: first make sure no payment
+    // attempt for it can still go through (cancelled at Stripe, or applied
+    // and reported if it already did).
+    if (status !== "accepted") {
+      await settlePendingPayments(id, { lang: req.lang });
     }
 
     const nextStatus = status === "accepted"
       ? statusAfterAccept(b.service_pricing_mode ?? b.pricing_mode)
       : status;
 
+    // "AND status = previous": two simultaneous clicks (or accept vs cancel)
+    // cannot both apply; the loser gets a 409.
     const result = await pool.query(
       nextStatus === "accepted" || nextStatus === "negotiating"
         ? `UPDATE bookings
            SET status = $1,
                pricing_mode = COALESCE(pricing_mode, $3),
                estimated_hours = COALESCE(estimated_hours, $4)
-           WHERE id = $2 RETURNING *`
-        : `UPDATE bookings SET status = $1 WHERE id = $2 RETURNING *`,
+           WHERE id = $2 AND status = $5
+             AND (payment_status IS NULL OR payment_status = 'unpaid')
+           RETURNING *`
+        : `UPDATE bookings SET status = $1
+           WHERE id = $2 AND status = $3
+             AND (payment_status IS NULL OR payment_status = 'unpaid')
+           RETURNING *`,
       nextStatus === "accepted" || nextStatus === "negotiating"
-        ? [nextStatus, id, b.service_pricing_mode ?? "fixed", b.service_estimated_hours ?? null]
-        : [nextStatus, id],
+        ? [nextStatus, id, b.service_pricing_mode ?? "fixed", b.service_estimated_hours ?? null, b.status]
+        : [nextStatus, id, b.status],
     );
+    if (result.rows.length === 0) {
+      return res.status(409).json({ message: "This booking changed in the meantime. Refresh and try again." });
+    }
 
     if (status === "accepted" || status === "rejected") {
       // Notify the party who did NOT make the decision
@@ -508,6 +530,7 @@ export const updateBookingStatus = async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
+    if (respondWithPaymentConflict(res, err)) return;
     console.error(err);
     res.status(500).json({ message: "Server error while updating booking" });
   }
@@ -843,6 +866,10 @@ export const customizeBooking = async (req, res) => {
       )) ||
       (custom_price !== undefined && Number(finalCustomPrice) !== currentEffectivePrice);
 
+    // The price is about to change: an earlier payment attempt must not go
+    // through at the old amount.
+    await settlePendingPayments(id, { lang: req.lang });
+
     const result = await pool.query(
       `UPDATE bookings
        SET worker_note = $1, custom_price = $2, custom_price_min = $3, custom_price_max = $4,
@@ -890,6 +917,7 @@ export const customizeBooking = async (req, res) => {
       }),
     );
   } catch (err) {
+    if (respondWithPaymentConflict(res, err)) return;
     console.error(err);
     res.status(500).json({ message: "Server error while customizing booking" });
   }
@@ -969,6 +997,10 @@ export const negotiateBookingPrice = async (req, res) => {
     appendDepositSets(sets, updateParams, depositOverride, 4);
     notifyAmountLabel = `${parsed.toFixed(2)} $`;
 
+    // The price is about to change: an earlier payment attempt must not go
+    // through at the old amount.
+    await settlePendingPayments(id, { lang: req.lang });
+
     const result = await pool.query(
       `UPDATE bookings SET ${sets.join(", ")} WHERE id = $2 RETURNING *`,
       updateParams,
@@ -998,6 +1030,7 @@ export const negotiateBookingPrice = async (req, res) => {
 
     res.json(enrichBookingRow({ ...result.rows[0], pricing_mode: pricingMode }));
   } catch (err) {
+    if (respondWithPaymentConflict(res, err)) return;
     console.error(err);
     res.status(500).json({ message: "Server error while proposing price" });
   }
@@ -1105,6 +1138,10 @@ export const confirmBookingPrice = async (req, res) => {
     const confirmParams = [id, selectedPrice, selectedSource];
     appendDepositSets(confirmSets, confirmParams, depositOverride, 4);
 
+    // The price is about to change: an earlier payment attempt must not go
+    // through at the old amount.
+    await settlePendingPayments(id, { lang: req.lang });
+
     let result = await pool.query(
       `UPDATE bookings SET ${confirmSets.join(", ")} WHERE id = $1 RETURNING *`,
       confirmParams,
@@ -1184,6 +1221,7 @@ export const confirmBookingPrice = async (req, res) => {
 
     res.json(enrichBookingRow({ ...updated, pricing_mode: pricingMode }));
   } catch (err) {
+    if (respondWithPaymentConflict(res, err)) return;
     console.error(err);
     res.status(500).json({ message: "Server error while confirming price" });
   }
@@ -1507,35 +1545,32 @@ export async function finalizeCompletion(booking) {
   // Worker receives net share (platform keeps WORKER_COMMISSION_RATE)
   const workerReceives = workerNetFromGross(effectivePrice);
 
-  // Ensure worker wallet exists
-  await pool.query(
-    "INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING",
-    [booking.worker_id]
-  );
-
-  // Guard both the transaction insert AND the wallet update against duplicates
-  const existingCredit = await pool.query(
-    "SELECT id FROM transactions WHERE booking_id = $1 AND type = 'credit'",
-    [booking.id]
-  );
-  if (existingCredit.rows.length === 0) {
-    await pool.query(
-      `INSERT INTO transactions (user_id, booking_id, type, amount, description, other_user_name, listing_title)
-       VALUES ($1, $2, 'credit', $3, 'Payment received for completed work', $4, $5)`,
-      [booking.worker_id, booking.id, workerReceives, booking.client_name, listingTitle || null]
+  // Credit + wallet in one transaction, the credit guarded by the unique
+  // index transactions_one_credit_per_booking: this runs from completion and
+  // from a late balance payment, and the former SELECT-then-INSERT let two
+  // concurrent runs credit the wallet twice.
+  const credited = await withTransaction(async (db) => {
+    await db.query(
+      "INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING",
+      [booking.worker_id],
     );
-    // Only credit wallet if transaction didn't already exist
-    await pool.query(
+    const inserted = await db.query(
+      `INSERT INTO transactions (user_id, booking_id, type, amount, description, other_user_name, listing_title)
+       VALUES ($1, $2, 'credit', $3, 'Payment received for completed work', $4, $5)
+       ON CONFLICT (booking_id, user_id) WHERE type = 'credit' AND booking_id IS NOT NULL DO NOTHING
+       RETURNING id`,
+      [booking.worker_id, booking.id, workerReceives, booking.client_name, listingTitle || null],
+    );
+    if (inserted.rows.length === 0) return false;
+    await db.query(
       `UPDATE wallets
        SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
        WHERE user_id = $2`,
-      [workerReceives, booking.worker_id]
+      [workerReceives, booking.worker_id],
     );
-  }
-
-  if (existingCredit.rows.length > 0) {
-    return false;
-  }
+    return true;
+  });
+  if (!credited) return false;
 
   // Notify worker: payment received
   createLocalizedNotification({

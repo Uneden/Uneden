@@ -1,6 +1,7 @@
 import pool from "../config/db.js";
 import { WORKER_COMMISSION_RATE, WORKER_PAYOUT_SHARE } from "../utils/commissionRates.js";
-import { getNextPayoutDate, subtractBusinessDays, processAllPayouts } from "../services/payoutService.js";
+import crypto from "node:crypto";
+import { getNextPayoutDate, isPayoutDay, subtractBusinessDays, processAllPayouts } from "../services/payoutService.js";
 import ExcelJS from "exceljs";
 import { logAdminAction } from "../services/auditService.js";
 
@@ -475,6 +476,33 @@ export const triggerPayout = async (req, res) => {
   } catch (err) {
     console.error("triggerPayout error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Payout run called by the scheduled GitHub workflow (payouts.yml). Render's
+ * free instance sleeps when idle, so the in-process Friday cron rarely fires;
+ * this request wakes it up. Authenticated by the CRON_SECRET shared secret,
+ * and only pays out on bi-weekly payout Fridays.
+ */
+export const runScheduledPayout = async (req, res) => {
+  const secret = process.env.CRON_SECRET || "";
+  const provided = (req.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const valid =
+    secret.length >= 32 &&
+    provided.length === secret.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret));
+  if (!valid) return res.status(401).json({ message: "Unauthorized" });
+
+  if (!isPayoutDay(new Date())) {
+    return res.json({ skipped: true, reason: "Not a payout day" });
+  }
+  try {
+    const result = await processAllPayouts();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("runScheduledPayout error:", err);
+    res.status(500).json({ message: "Payout run failed" });
   }
 };
 

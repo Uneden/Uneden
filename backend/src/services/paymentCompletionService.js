@@ -1,7 +1,9 @@
 import pool from "../config/db.js";
+import stripe from "../config/stripe.js";
+import { withTransaction } from "./paymentGuards.js";
 import { finalizeCompletion } from "../controllers/bookingController.js";
 import { notifyPaymentReceipt } from "./emailService.js";
-import { getUserLang } from "./notificationService.js";
+import { createLocalizedNotification, getUserLang } from "./notificationService.js";
 import {
   ensureDepositsAndCalendarSchema,
   calculateDepositAmount,
@@ -105,8 +107,8 @@ export async function repairDoubledDepositPaidBase(bookingId) {
   return (result.rowCount ?? 0) > 0;
 }
 
-async function loadBookingForHourlyPayment(bookingId) {
-  const result = await pool.query(
+async function loadBookingForHourlyPayment(bookingId, db = pool, { lock = false } = {}) {
+  const result = await db.query(
     `SELECT b.*, s.title, s.price AS service_price, s.pricing_mode AS service_pricing_mode,
             s.price_max, s.estimated_hours AS service_estimated_hours,
             s.deposit_enabled AS service_deposit_enabled,
@@ -116,7 +118,8 @@ async function loadBookingForHourlyPayment(bookingId) {
      FROM bookings b
      JOIN services s ON s.id = b.service_id
      JOIN users uc ON uc.id = b.client_id
-     WHERE b.id = $1`,
+     WHERE b.id = $1
+     ${lock ? "FOR UPDATE OF b" : ""}`,
     [bookingId],
   );
   const row = result.rows[0];
@@ -129,8 +132,61 @@ async function loadBookingForHourlyPayment(bookingId) {
 }
 
 /**
+ * Whether the booking, as it is now, can take this kind of payment. A payment
+ * can land after the booking moved on (cancelled, rejected, paid in another
+ * tab): it must then be refunded, not applied.
+ */
+export function bookingAcceptsPayment(booking, paymentKind) {
+  if (!booking) return false;
+  const unpaid = !booking.payment_status || booking.payment_status === "unpaid";
+  if (paymentKind === "balance") {
+    return ["active", "completed"].includes(booking.status) &&
+      ["deposit_paid", "paid"].includes(booking.payment_status);
+  }
+  return booking.status === "accepted" && unpaid;
+}
+
+/**
+ * Refunds a payment that cannot be applied (see bookingAcceptsPayment). The
+ * idempotency key makes webhook retries and verify calls refund only once.
+ */
+async function refundUnappliedPayment({ bookingId, paymentIntentId, clientId }) {
+  await stripe.refunds.create(
+    { payment_intent: paymentIntentId },
+    { idempotencyKey: `unapplied-payment:${paymentIntentId}` },
+  );
+  await pool.query(
+    `UPDATE payments SET status = 'refunded', updated_at = NOW()
+     WHERE stripe_payment_intent_id = $1 AND status = 'refunding'`,
+    [paymentIntentId],
+  );
+  console.error(`[Payment] Refunded ${paymentIntentId}: booking ${bookingId} no longer accepted this payment`);
+  if (clientId) {
+    createLocalizedNotification({
+      userId: clientId,
+      type: "payment",
+      link: `/bookings?booking=${bookingId}`,
+      en: {
+        title: "Payment refunded",
+        body: "Your payment arrived after the booking changed (cancelled or already paid). It has been fully refunded.",
+      },
+      fr: {
+        title: "Paiement remboursé",
+        body: "Votre paiement est arrivé après un changement de la réservation (annulée ou déjà payée). Il vous a été entièrement remboursé.",
+      },
+    }).catch(() => {});
+  }
+}
+
+/**
  * Apply successful payment to booking, transactions, platform earnings, and ledger.
  * Used by Checkout Session webhook and PaymentIntent webhook.
+ *
+ * Everything below runs in one transaction: claiming the payment row and
+ * updating the booking used to be separate writes, so a failure in between
+ * left a payment marked paid on a booking still "unpaid", which no retry could
+ * repair (the claim was already taken). Throws on failure so the Stripe
+ * webhook answers 500 and Stripe retries.
  */
 export async function applySuccessfulPayment({
   bookingId,
@@ -143,92 +199,145 @@ export async function applySuccessfulPayment({
   taxesCents = 0,
 }) {
   await ensureDepositsAndCalendarSchema(pool);
+  if (!paymentIntentId) return;
 
-  // Claim the pending payment atomically so verify + webhook cannot double-apply
-  // paid_service_base_cents (which previously turned a $70 deposit into $140).
-  let claimedPayment = false;
-  if (paymentIntentId) {
-    if (checkoutSessionId) {
-      const claimed = await pool.query(
-        `UPDATE payments
-         SET status = 'paid', stripe_payment_intent_id = $1, updated_at = NOW()
-         WHERE stripe_checkout_session_id = $2 AND status = 'pending'
-         RETURNING id`,
-        [paymentIntentId, checkoutSessionId],
+  const outcome = await withTransaction(async (db) => {
+    // Lock the payment row: concurrent webhook + verify calls queue here.
+    const paymentRow = (
+      await db.query(
+        checkoutSessionId
+          ? `SELECT id, status FROM payments WHERE stripe_checkout_session_id = $1 FOR UPDATE`
+          : `SELECT id, status FROM payments WHERE stripe_payment_intent_id = $1 AND booking_id = $2 FOR UPDATE`,
+        checkoutSessionId ? [checkoutSessionId] : [paymentIntentId, bookingId],
+      )
+    ).rows[0];
+    if (!paymentRow) return { done: true }; // unknown attempt: nothing to apply it to
+    if (paymentRow.status === "refunding") return { refund: true };
+    // "cancelled": the attempt was superseded (new attempt, price change,
+    // cancellation) yet still got paid: refund it rather than apply it.
+    if (paymentRow.status !== "pending" && paymentRow.status !== "cancelled") return { done: true };
+
+    const bookingRow = await loadBookingForHourlyPayment(bookingId, db, { lock: true });
+    if (paymentRow.status === "cancelled" || !bookingAcceptsPayment(bookingRow, paymentKind)) {
+      await db.query(
+        `UPDATE payments SET status = 'refunding', stripe_payment_intent_id = $2, updated_at = NOW() WHERE id = $1`,
+        [paymentRow.id, paymentIntentId],
       );
-      claimedPayment = claimed.rows.length > 0;
-      if (!claimedPayment) {
-        const already = await pool.query(
-          `SELECT id FROM payments
-           WHERE stripe_checkout_session_id = $1 AND status = 'paid'`,
-          [checkoutSessionId],
-        );
-        if (already.rows.length > 0) return;
-      }
-    } else {
-      const claimed = await pool.query(
-        `UPDATE payments
-         SET status = 'paid', updated_at = NOW()
-         WHERE stripe_payment_intent_id = $1 AND booking_id = $2 AND status = 'pending'
-         RETURNING id`,
-        [paymentIntentId, bookingId],
-      );
-      claimedPayment = claimed.rows.length > 0;
-      if (!claimedPayment) {
-        const already = await pool.query(
-          `SELECT id FROM payments
-           WHERE stripe_payment_intent_id = $1 AND booking_id = $2 AND status = 'paid'`,
-          [paymentIntentId, bookingId],
-        );
-        if (already.rows.length > 0) return;
-      }
+      return { refund: true, clientId: bookingRow?.client_id };
     }
-  }
 
-  if (paymentIntentId && !claimedPayment) {
-    // No matching payment row to claim — avoid mutating booking totals blindly.
+    await db.query(
+      `UPDATE payments SET status = 'paid', stripe_payment_intent_id = $2, updated_at = NOW() WHERE id = $1`,
+      [paymentRow.id, paymentIntentId],
+    );
+
+    const newPaidBase = Number(bookingRow.paid_service_base_cents || 0) + paidServiceCents;
+    const balanceDueCents = computeBalanceDueAfterDeposit(bookingRow, newPaidBase);
+
+    if (paymentKind === "deposit") {
+      await db.query(
+        `UPDATE bookings
+         SET payment_status = 'deposit_paid', status = 'active',
+             paid_service_base_cents = $2, balance_due_cents = $3
+         WHERE id = $1`,
+        [bookingId, newPaidBase, balanceDueCents],
+      );
+    } else if (paymentKind === "balance") {
+      await db.query(
+        `UPDATE bookings
+         SET paid_service_base_cents = $2, balance_due_cents = $3, payment_status = $4
+         WHERE id = $1`,
+        [bookingId, newPaidBase, balanceDueCents, balanceDueCents <= 0 ? "paid" : "deposit_paid"],
+      );
+    } else {
+      await db.query(
+        `UPDATE bookings
+         SET payment_status = 'paid', status = 'active',
+             paid_service_base_cents = paid_service_base_cents + GREATEST($2, 0),
+             balance_due_cents = 0
+         WHERE id = $1`,
+        [bookingId, paidServiceCents],
+      );
+    }
+
+    const details = (
+      await db.query(
+        `SELECT b.client_id, p.amount, p.payment_kind, s.title, s.image_url, s.image_urls,
+                CASE WHEN uw.account_type = 'company' THEN uw.company_name ELSE uw.full_name END AS worker_name,
+                CASE WHEN uc.account_type = 'company' THEN uc.company_name ELSE uc.full_name END AS client_name,
+                uc.email AS client_email
+         FROM bookings b
+         JOIN services s ON b.service_id = s.id
+         JOIN users uw ON b.worker_id = uw.id
+         JOIN users uc ON b.client_id = uc.id
+         JOIN payments p ON p.id = $2
+         WHERE b.id = $1`,
+        [bookingId, paymentRow.id],
+      )
+    ).rows[0];
+
+    const kind = details.payment_kind || paymentKind;
+    const amountDollars = (details.amount / 100).toFixed(2);
+    const txDescription = CHECKOUT_TX_DESCRIPTION[kind] || CHECKOUT_TX_DESCRIPTION.full;
+
+    const existingDebit = await db.query(
+      `SELECT id FROM transactions WHERE booking_id = $1 AND type = 'debit' AND description = $2`,
+      [bookingId, txDescription],
+    );
+    const firstDebit = existingDebit.rows.length === 0;
+    if (firstDebit) {
+      await db.query(
+        `INSERT INTO transactions (user_id, booking_id, type, amount, description, other_user_name, listing_title)
+         VALUES ($1, $2, 'debit', $3, $4, $5, $6)`,
+        [details.client_id, bookingId, amountDollars, txDescription, details.worker_name, details.title],
+      );
+      await db.query(
+        `INSERT INTO wallets (user_id, balance, total_spent)
+         VALUES ($1, 0, $2)
+         ON CONFLICT (user_id) DO UPDATE SET total_spent = wallets.total_spent + $2`,
+        [details.client_id, amountDollars],
+      );
+    }
+
+    if (paidServiceCents > 0 && paymentKind !== "deposit") {
+      const buyerCommission = (Math.round(paidServiceCents * BUYER_COMMISSION_RATE) / 100).toFixed(2);
+      await db.query(
+        `INSERT INTO platform_earnings (booking_id, type, amount, description)
+         VALUES ($1, 'buyer_commission', $2, 'Commission acheteur 5% — ' || $3)
+         ON CONFLICT (booking_id, type) DO UPDATE
+         SET amount = (platform_earnings.amount::numeric + EXCLUDED.amount::numeric)::numeric(10,2)`,
+        [bookingId, buyerCommission, details.title],
+      );
+    }
+
+    await recordClientPaymentLedger({
+      bookingId,
+      clientId: details.client_id,
+      paymentIntentId,
+      totalCents: totalAmountCents ?? details.amount,
+      servicePriceCents: paidServiceCents,
+      buyerCommissionCents: buyerCommissionCents || Math.round(paidServiceCents * BUYER_COMMISSION_RATE),
+      taxesCents,
+      paymentKind: kind,
+      title: details.title,
+    }, db);
+
+    return { applied: true, details, amountDollars, sendReceipt: firstDebit };
+  });
+
+  if (outcome.refund) {
+    await refundUnappliedPayment({ bookingId, paymentIntentId, clientId: outcome.clientId });
     return;
   }
+  if (!outcome.applied) return;
 
-  const bookingRow = await loadBookingForHourlyPayment(bookingId);
-  const prevPaidBase = Number(bookingRow?.paid_service_base_cents || 0);
-  const newPaidBase = prevPaidBase + paidServiceCents;
-  const balanceDueCents = bookingRow
-    ? computeBalanceDueAfterDeposit(bookingRow, newPaidBase)
-    : 0;
-
-  if (paymentKind === "deposit") {
-    await pool.query(
-      `UPDATE bookings
-       SET payment_status = 'deposit_paid',
-           status = 'active',
-           paid_service_base_cents = $2,
-           balance_due_cents = $3
-       WHERE id = $1 AND status IN ('accepted', 'active')`,
-      [bookingId, newPaidBase, balanceDueCents],
-    );
-  } else if (paymentKind === "balance") {
-    const nextPaymentStatus = balanceDueCents <= 0 ? "paid" : "deposit_paid";
-    await pool.query(
-      `UPDATE bookings
-       SET paid_service_base_cents = $2,
-           balance_due_cents = $3,
-           payment_status = $4
-       WHERE id = $1`,
-      [bookingId, newPaidBase, balanceDueCents, nextPaymentStatus],
-    );
-  } else {
-    await pool.query(
-      `UPDATE bookings
-       SET payment_status = 'paid',
-           status = 'active',
-           paid_service_base_cents = CASE
-             WHEN $2 > 0 THEN paid_service_base_cents + $2
-             ELSE paid_service_base_cents
-           END,
-           balance_due_cents = 0
-       WHERE id = $1 AND status = 'accepted'`,
-      [bookingId, paidServiceCents],
+  // Side effects only once the money is recorded.
+  const { details, amountDollars, sendReceipt } = outcome;
+  if (sendReceipt) {
+    const clientLang = await getUserLang(details.client_id);
+    notifyPaymentReceipt(
+      details.client_email, details.client_name, details.title, amountDollars, details.worker_name,
+      bookingId, details.image_url, details.image_urls, clientLang,
     );
   }
 
@@ -238,89 +347,6 @@ export async function applySuccessfulPayment({
       console.error("Finalize completion after payment failed for booking", bookingId, err.message),
     );
   }
-
-  const paymentFilter = checkoutSessionId
-    ? "p.stripe_checkout_session_id = $2"
-    : "p.stripe_payment_intent_id = $2";
-
-  const booking = await pool.query(
-    `SELECT b.client_id, b.worker_id, p.amount, p.payment_kind, s.title, s.image_url, s.image_urls,
-            CASE WHEN uw.account_type = 'company' THEN uw.company_name ELSE uw.full_name END AS worker_name,
-            CASE WHEN uc.account_type = 'company' THEN uc.company_name ELSE uc.full_name END AS client_name,
-            uc.email AS client_email
-     FROM bookings b
-     JOIN services s ON b.service_id = s.id
-     JOIN users uw ON b.worker_id = uw.id
-     JOIN users uc ON b.client_id = uc.id
-     JOIN payments p ON p.booking_id = b.id AND ${paymentFilter}
-     WHERE b.id = $1`,
-    [bookingId, checkoutSessionId ?? paymentIntentId],
-  );
-
-  if (booking.rows.length === 0) return;
-
-  const {
-    client_id,
-    amount,
-    payment_kind: dbPaymentKind,
-    title,
-    image_url,
-    image_urls,
-    worker_name,
-    client_name,
-    client_email,
-  } = booking.rows[0];
-  const kind = dbPaymentKind || paymentKind;
-  const amountDollars = (amount / 100).toFixed(2);
-  const txDescription = CHECKOUT_TX_DESCRIPTION[kind] || CHECKOUT_TX_DESCRIPTION.full;
-
-  const existing = await pool.query(
-    `SELECT id FROM transactions
-     WHERE booking_id = $1 AND type = 'debit' AND description = $2`,
-    [bookingId, txDescription],
-  );
-  if (existing.rows.length === 0) {
-    await pool.query(
-      `INSERT INTO transactions (user_id, booking_id, type, amount, description, other_user_name, listing_title)
-       VALUES ($1, $2, 'debit', $3, $4, $5, $6)`,
-      [client_id, bookingId, amountDollars, txDescription, worker_name, title],
-    );
-    await pool.query(
-      `INSERT INTO wallets (user_id, balance, total_spent)
-       VALUES ($1, 0, $2)
-       ON CONFLICT (user_id) DO UPDATE
-       SET total_spent = wallets.total_spent + $2`,
-      [client_id, amountDollars],
-    );
-    const clientLang = await getUserLang(client_id);
-    notifyPaymentReceipt(
-      client_email, client_name, title, amountDollars, worker_name, bookingId, image_url, image_urls, clientLang,
-    );
-  }
-
-  const servicePriceCents = paidServiceCents;
-  if (servicePriceCents > 0 && paymentKind !== "deposit") {
-    const buyerCommission = (Math.round(servicePriceCents * BUYER_COMMISSION_RATE) / 100).toFixed(2);
-    await pool.query(
-      `INSERT INTO platform_earnings (booking_id, type, amount, description)
-       VALUES ($1, 'buyer_commission', $2, 'Commission acheteur 5% — ' || $3)
-       ON CONFLICT (booking_id, type) DO UPDATE
-       SET amount = (platform_earnings.amount::numeric + EXCLUDED.amount::numeric)::numeric(10,2)`,
-      [bookingId, buyerCommission, title],
-    );
-  }
-
-  await recordClientPaymentLedger({
-    bookingId,
-    clientId: client_id,
-    paymentIntentId,
-    totalCents: totalAmountCents ?? amount,
-    servicePriceCents,
-    buyerCommissionCents: buyerCommissionCents || Math.round(servicePriceCents * BUYER_COMMISSION_RATE),
-    taxesCents,
-    paymentKind: kind,
-    title,
-  });
 }
 
 export async function completeCheckoutPayment(session) {

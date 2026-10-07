@@ -10,6 +10,7 @@ import {
 } from "../services/stripeCustomerService.js";
 import { completePaymentFromIntent } from "../services/paymentCompletionService.js";
 import { ensureDepositsAndCalendarSchema } from "../utils/depositSchema.js";
+import { respondWithPaymentConflict, settlePendingPayments } from "../services/paymentGuards.js";
 
 export const createPaymentIntent = async (req, res) => {
   try {
@@ -62,36 +63,54 @@ export const createPaymentIntent = async (req, res) => {
       ],
     );
 
-    await pool.query(
-      `DELETE FROM payments WHERE booking_id = $1 AND status = 'pending'`,
-      [booking_id],
-    );
+    const metadata = {
+      booking_id: String(booking_id),
+      payment_kind: checkoutKind,
+      service_price_cents: String(servicePriceCents),
+      deposit_amount_cents: String(depositAmountCents),
+      buyer_commission_cents: String(buyerCommissionCents),
+      taxes_cents: String(taxesCents),
+      total_cents: String(totalCents),
+      source: "uneden_elements",
+      ...(billing_address_id ? { billing_address_id: String(billing_address_id) } : {}),
+    };
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalCents,
-      currency: "cad",
-      customer: stripeCustomerId,
-      ...(payment_method_id ? { payment_method: payment_method_id } : {}),
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      metadata: {
-        booking_id: String(booking_id),
-        payment_kind: checkoutKind,
-        service_price_cents: String(servicePriceCents),
-        deposit_amount_cents: String(depositAmountCents),
-        buyer_commission_cents: String(buyerCommissionCents),
-        taxes_cents: String(taxesCents),
-        total_cents: String(totalCents),
-        source: "uneden_elements",
-        ...(billing_address_id ? { billing_address_id: String(billing_address_id) } : {}),
-      },
+    // Earlier attempts (second tab, reload, back button) used to be deleted
+    // here while their PaymentIntent stayed payable at Stripe: the client
+    // could pay twice, and the first payment was never applied. Reuse the
+    // attempt when it charges the same thing, cancel it otherwise.
+    const reusable = await settlePendingPayments(booking_id, {
+      lang,
+      reuse: (intent) =>
+        intent.amount === totalCents &&
+        intent.customer === stripeCustomerId &&
+        intent.metadata?.payment_kind === checkoutKind &&
+        intent.metadata?.service_price_cents === metadata.service_price_cents &&
+        intent.metadata?.taxes_cents === metadata.taxes_cents,
     });
 
-    await pool.query(
-      `INSERT INTO payments
-         (booking_id, amount, status, stripe_payment_intent_id, platform_fee, currency, deposit_amount_cents, payment_kind)
-       VALUES ($1, $2, 'pending', $3, $4, 'cad', $5, $6)`,
-      [booking_id, totalCents, paymentIntent.id, buyerCommissionCents, depositAmountCents, checkoutKind],
-    );
+    const paymentIntent = reusable
+      ? await stripe.paymentIntents.update(reusable.id, {
+          metadata,
+          ...(payment_method_id ? { payment_method: payment_method_id } : {}),
+        })
+      : await stripe.paymentIntents.create({
+          amount: totalCents,
+          currency: "cad",
+          customer: stripeCustomerId,
+          ...(payment_method_id ? { payment_method: payment_method_id } : {}),
+          automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+          metadata,
+        });
+
+    if (!reusable) {
+      await pool.query(
+        `INSERT INTO payments
+           (booking_id, amount, status, stripe_payment_intent_id, platform_fee, currency, deposit_amount_cents, payment_kind)
+         VALUES ($1, $2, 'pending', $3, $4, 'cad', $5, $6)`,
+        [booking_id, totalCents, paymentIntent.id, buyerCommissionCents, depositAmountCents, checkoutKind],
+      );
+    }
 
     res.json({
       client_secret: paymentIntent.client_secret,
@@ -100,6 +119,7 @@ export const createPaymentIntent = async (req, res) => {
       amount_cents: totalCents,
     });
   } catch (err) {
+    if (respondWithPaymentConflict(res, err)) return;
     console.error("[PaymentIntent] create error:", err);
     res.status(500).json({ message: "Failed to create payment intent" });
   }

@@ -76,6 +76,59 @@ test.describe('API contracts', () => {
     }
   });
 
+  test('booking status only moves along allowed transitions', async ({ request }) => {
+    const seller = await signIn(request, process.env.TEST_EMAIL!, process.env.TEST_PASSWORD!);
+    const buyer = await signIn(request, process.env.TEST_EMAIL_2!, process.env.TEST_PASSWORD_2!);
+
+    // A public listing of our own, so earlier runs' pending requests don't interfere.
+    const listingRes = await request.post(`${API}/services`, {
+      headers: seller,
+      data: listingPayload({ is_public: true, listing_tags: ['Tutoring (Math, Science)'] }),
+    });
+    expect(listingRes.status(), await listingRes.text()).toBe(201);
+    const listing = await listingRes.json();
+
+    try {
+      const bookingRes = await request.post(`${API}/bookings`, {
+        headers: buyer,
+        data: { service_id: listing.id, client_description: 'API contract test' },
+      });
+      expect(bookingRes.status(), await bookingRes.text()).toBe(201);
+      const booking = await bookingRes.json();
+      const setStatus = (auth: Record<string, string>, status: string) =>
+        request.put(`${API}/bookings/${booking.id}/status`, { headers: auth, data: { status } });
+
+      // Only the listing poster accepts.
+      expect((await setStatus(buyer, 'accepted')).status()).toBe(403);
+      expect((await setStatus(seller, 'accepted')).status()).toBe(200);
+      // Accepting twice is a conflict, not a silent overwrite.
+      expect((await setStatus(seller, 'accepted')).status()).toBe(409);
+
+      expect((await setStatus(buyer, 'cancelled')).status()).toBe(200);
+      // A cancelled booking can't be revived or rejected.
+      expect((await setStatus(seller, 'accepted')).status()).toBe(409);
+      expect((await setStatus(seller, 'rejected')).status()).toBe(409);
+      // Statuses owned by payment / completion flows are refused here.
+      expect((await setStatus(seller, 'active')).status()).toBe(400);
+      expect((await setStatus(seller, 'completed')).status()).toBe(400);
+    } finally {
+      await request.delete(`${API}/services/${listing.id}`, { headers: seller });
+    }
+  });
+
+  test('unsafe payment endpoints are gone and the payout trigger needs its secret', async ({ request }) => {
+    const seller = await signIn(request, process.env.TEST_EMAIL!, process.env.TEST_PASSWORD!);
+    // /release paid workers a miscomputed amount with no double-call guard;
+    // /checkout bypassed the pending-payment guards.
+    expect((await request.post(`${API}/payments/release`, { headers: seller, data: {} })).status()).toBe(404);
+    expect((await request.post(`${API}/payments/checkout`, { headers: seller, data: {} })).status()).toBe(404);
+
+    const scheduled = await request.post(`${API}/wallet/payout/scheduled`, {
+      headers: { Authorization: 'Bearer not-the-secret' },
+    });
+    expect(scheduled.status()).toBe(401);
+  });
+
   test('billing addresses: validation, default switch and deleting the default', async ({ request }) => {
     const auth = await signIn(request, process.env.TEST_EMAIL!, process.env.TEST_PASSWORD!);
     const list = async () => {
