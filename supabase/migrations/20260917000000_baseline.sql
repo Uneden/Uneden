@@ -1705,9 +1705,6 @@ CREATE OR REPLACE TRIGGER "message_rate_limit_trigger" BEFORE INSERT ON "public"
 
 
 
-CREATE OR REPLACE TRIGGER "on-new-message-notify" AFTER INSERT ON "public"."messages" FOR EACH ROW EXECUTE FUNCTION "supabase_functions"."http_request"('https://ukepqavytmaotdgdxhum.supabase.co/functions/v1/super-handler', 'POST', '{"Content-type":"application/json","Authorization":"Bearer <SERVICE_ROLE_KEY: set in production, never committed>"}', '{}', '9985');
-
-
 
 CREATE OR REPLACE TRIGGER "sync_avatar_on_update" AFTER UPDATE OF "avatar" ON "public"."users" FOR EACH ROW WHEN (("new"."avatar" IS DISTINCT FROM "old"."avatar")) EXECUTE FUNCTION "public"."sync_avatar_from_users"();
 

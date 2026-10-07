@@ -4,7 +4,7 @@ import { notifyDisputeCreated, notifyDisputeOutcome } from "../services/emailSer
 import { createLocalizedNotification, getUserLang, shouldSendEmail } from "../services/notificationService.js";
 import { buildRefundSummary, processBookingRefund } from "../services/refundService.js";
 import { logAdminAction } from "../services/auditService.js";
-import { sanitizeText } from "../utils/validate.js";
+import { isValidUUID, sanitizeText } from "../utils/validate.js";
 
 const DISPUTE_ATTACHMENTS_BUCKET = "dispute-attachments";
 const MAX_DISPUTE_ATTACHMENTS = 4;
@@ -66,9 +66,18 @@ async function getDisputeAttachmentCount(disputeId) {
 export const CreateDispute = async (req, res) => {
     try {
         const { booking_id } = req.body;
-        const description = sanitizeText(req.body.description);
+        const description = sanitizeText(req.body.description ?? "").trim();
         const raised_by = req.user.id;
-        const status = "open";
+
+        if (!isValidUUID(booking_id)) {
+            return res.status(404).json({ message: "Booking not found" });
+        }
+        if (!description) {
+            return res.status(400).json({ message: "Describe the problem to open a complaint" });
+        }
+        if (description.length > 5000) {
+            return res.status(400).json({ message: "The description must be at most 5000 characters" });
+        }
 
         const booking = await pool.query("SELECT * FROM bookings WHERE id = $1", [booking_id]);
         if (booking.rows.length === 0) {
@@ -79,6 +88,13 @@ export const CreateDispute = async (req, res) => {
             return res.status(403).json({ message: "You are not part of this booking" });
         }
 
+        // A complaint settles money that changed hands: an unpaid request has
+        // nothing to refund or withhold (cancel or reject it instead).
+        const paid = ["paid", "deposit_paid", "transferred"].includes(b.payment_status);
+        if (!paid || !["active", "completed"].includes(b.status)) {
+            return res.status(400).json({ message: "A complaint can only be opened on a paid booking in progress or completed." });
+        }
+
         // Dispute only allowed within 3 days of completion
         if (b.status === "completed" && b.completed_at) {
             const daysSinceCompletion = (Date.now() - new Date(b.completed_at).getTime()) / (1000 * 60 * 60 * 24);
@@ -86,64 +102,64 @@ export const CreateDispute = async (req, res) => {
                 return res.status(400).json({ message: "The 3-day dispute window has expired for this booking." });
             }
         }
-        const allowed = ["open", "resolved", "rejected"];
-        if (!allowed.includes(status)) {
-        return res.status(400).json({ message: "Invalid dispute status" });
-        }
 
-        const existing = await pool.query(
-        "SELECT * FROM disputes WHERE booking_id = $1",
-        [booking_id]
-        );
-
-        if (existing.rows.length > 0) {
-        return res.status(400).json({ message: "A dispute already exists for this booking" });
-        }
-
+        // disputes_one_per_booking (unique index) settles a double submit.
         const result = await pool.query(
-            `INSERT INTO disputes (booking_id, raised_by, description, status) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [booking_id, raised_by, description, status]
+            `INSERT INTO disputes (booking_id, raised_by, description, status)
+             VALUES ($1, $2, $3, 'open')
+             ON CONFLICT (booking_id) DO NOTHING
+             RETURNING *`,
+            [booking_id, raised_by, description]
         );
-
-        const users = await pool.query(
-            `SELECT
-                u1.email as client_email,
-                CASE WHEN u1.account_type = 'company' THEN u1.company_name ELSE u1.full_name END as client_name,
-                u2.email as worker_email,
-                CASE WHEN u2.account_type = 'company' THEN u2.company_name ELSE u2.full_name END as worker_name
-            FROM users u1, users u2
-            WHERE u1.id = $1 AND u2.id = $2`,
-            [b.client_id, b.worker_id]
-        );
-
-        if (users.rows.length > 0) {
-            const { client_email, client_name, worker_email, worker_name } = users.rows[0];
-            const [clientLang, workerLang] = await Promise.all([
-              getUserLang(b.client_id),
-              getUserLang(b.worker_id),
-            ]);
-            if (await shouldSendEmail(b.client_id, "complaint"))
-              await notifyDisputeCreated(client_email, client_name, booking_id, description, clientLang);
-            if (await shouldSendEmail(b.worker_id, "complaint"))
-              await notifyDisputeCreated(worker_email, worker_name, booking_id, description, workerLang);
-
-            // Notify the other party in-app
-            const otherPartyId = raised_by === b.client_id ? b.worker_id : b.client_id;
-            const raisedByName = raised_by === b.client_id ? client_name : worker_name;
-            createLocalizedNotification({
-              userId: otherPartyId,
-              type: "dispute",
-              link: "/bookings",
-              en: { title: "Complaint opened", body: `${raisedByName} opened a complaint about a booking.` },
-              fr: { title: "Plainte ouverte", body: `${raisedByName} a ouvert une plainte concernant une réservation.` },
-            });
+        if (result.rows.length === 0) {
+            return res.status(409).json({ message: "A dispute already exists for this booking" });
         }
 
         res.status(201).json(result.rows[0]);
+
+        // The dispute is saved: failing notifications must not turn it into a 500.
+        notifyDisputeParties(b, raised_by, description).catch((err) =>
+            console.error("Dispute notifications failed:", err.message),
+        );
     } catch (err){
         console.error(err);
         res.status(500).json({ message: "Server error while creating dispute" });
     }
+}
+
+async function notifyDisputeParties(b, raisedBy, description) {
+    const users = await pool.query(
+        `SELECT
+            u1.email as client_email,
+            CASE WHEN u1.account_type = 'company' THEN u1.company_name ELSE u1.full_name END as client_name,
+            u2.email as worker_email,
+            CASE WHEN u2.account_type = 'company' THEN u2.company_name ELSE u2.full_name END as worker_name
+        FROM users u1, users u2
+        WHERE u1.id = $1 AND u2.id = $2`,
+        [b.client_id, b.worker_id]
+    );
+    if (users.rows.length === 0) return;
+
+    const { client_email, client_name, worker_email, worker_name } = users.rows[0];
+    const [clientLang, workerLang] = await Promise.all([
+      getUserLang(b.client_id),
+      getUserLang(b.worker_id),
+    ]);
+    if (await shouldSendEmail(b.client_id, "complaint"))
+      await notifyDisputeCreated(client_email, client_name, b.id, description, clientLang);
+    if (await shouldSendEmail(b.worker_id, "complaint"))
+      await notifyDisputeCreated(worker_email, worker_name, b.id, description, workerLang);
+
+    // Notify the other party in-app
+    const otherPartyId = raisedBy === b.client_id ? b.worker_id : b.client_id;
+    const raisedByName = raisedBy === b.client_id ? client_name : worker_name;
+    createLocalizedNotification({
+      userId: otherPartyId,
+      type: "dispute",
+      link: "/bookings",
+      en: { title: "Complaint opened", body: `${raisedByName} opened a complaint about a booking.` },
+      fr: { title: "Plainte ouverte", body: `${raisedByName} a ouvert une plainte concernant une réservation.` },
+    });
 }
 
 export const GetDisputes = async (req, res) => {

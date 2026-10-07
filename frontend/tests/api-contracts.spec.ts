@@ -98,6 +98,18 @@ test.describe('API contracts', () => {
       const setStatus = (auth: Record<string, string>, status: string) =>
         request.put(`${API}/bookings/${booking.id}/status`, { headers: auth, data: { status } });
 
+      // Nothing happened yet: no review, no complaint.
+      const review = await request.post(`${API}/reviews`, {
+        headers: buyer,
+        data: { booking_id: booking.id, rating: 5, comment: 'API contract test' },
+      });
+      expect(review.status()).toBe(400);
+      const dispute = await request.post(`${API}/disputes`, {
+        headers: buyer,
+        data: { booking_id: booking.id, description: 'API contract test' },
+      });
+      expect(dispute.status()).toBe(400);
+
       // Only the listing poster accepts.
       expect((await setStatus(buyer, 'accepted')).status()).toBe(403);
       expect((await setStatus(seller, 'accepted')).status()).toBe(200);

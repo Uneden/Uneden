@@ -1,5 +1,5 @@
 import pool from "../config/db.js";
-import stripe from "../config/stripe.js";
+import { refundAcrossPayments } from "./refundService.js";
 import { normalizePricingMode } from "../utils/servicePricing.js";
 import { resolveBookingHourlyRate } from "../utils/hourlyPayment.js";
 import { createLocalizedNotification } from "../services/notificationService.js";
@@ -49,14 +49,17 @@ export async function processHourlyReconciliation(bookingId) {
     return { refunded_cents: 0, final_base: finalBase, paid_base: paidBaseCents / 100 };
   }
 
-  const latestPayment = await pool.query(
-    `SELECT stripe_payment_intent_id FROM payments
-     WHERE booking_id = $1 AND status = 'paid'
-     ORDER BY created_at DESC LIMIT 1`,
-    [bookingId],
-  );
-  const paymentIntentId = latestPayment.rows[0]?.stripe_payment_intent_id;
-  if (!paymentIntentId) {
+  // Every charge (deposit + balance), not only the latest one, which may be
+  // smaller than the overpayment.
+  const payments = (
+    await pool.query(
+      `SELECT id, stripe_payment_intent_id FROM payments
+       WHERE booking_id = $1 AND status = 'paid' AND stripe_payment_intent_id IS NOT NULL
+       ORDER BY created_at DESC`,
+      [bookingId],
+    )
+  ).rows;
+  if (payments.length === 0) {
     return { refunded_cents: 0, final_base: finalBase, paid_base: paidBaseCents / 100 };
   }
 
@@ -65,10 +68,7 @@ export async function processHourlyReconciliation(bookingId) {
   const refundTaxCents = Math.round(refundBaseCents * taxRate);
   const totalRefundCents = refundBaseCents + refundTaxCents;
 
-  await stripe.refunds.create({
-    payment_intent: paymentIntentId,
-    amount: totalRefundCents,
-  });
+  await refundAcrossPayments(payments, totalRefundCents, `hourly-reconcile:${bookingId}`);
 
   createLocalizedNotification({
     userId: booking.client_id,

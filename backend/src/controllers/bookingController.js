@@ -634,9 +634,10 @@ export const markCompleted = async (req, res) => {
       }
 
       // Hourly: refund overpayment before worker payout
-      await processHourlyReconciliation(id).catch((err) =>
-        console.error("Hourly reconciliation failed for booking", id, err.message),
-      );
+      const reconciliation = await processHourlyReconciliation(id).catch((err) => {
+        console.error("Hourly reconciliation failed for booking", id, err.message);
+        return null;
+      });
 
       // Reload booking with approved hours for payout
       const freshBooking = await pool.query(
@@ -657,10 +658,18 @@ export const markCompleted = async (req, res) => {
       );
 
       // Both confirmed — send completion emails to both
-      const effectivePrice = getEffectiveBookingPrice(payoutBooking);
-      const taxRate = b.tax_rate ? Number(b.tax_rate) : getTaxRateForProvince(b.client_province);
-      const totalPaid = (effectivePrice * (1 + 0.05 + taxRate)).toFixed(2);
-      const workerReceives = workerNetFromGross(effectivePrice).toFixed(2);
+      // What the client really paid: every charge (deposit + balance, fees and
+      // taxes included) minus the hourly overpayment refund. Recomputing it
+      // from the price was wrong for deposits and adjusted hourly bookings.
+      const charged = await pool.query(
+        `SELECT COALESCE(SUM(amount), 0) AS cents FROM payments
+         WHERE booking_id = $1 AND status IN ('paid', 'transferred')`,
+        [id],
+      );
+      const paidCents = Number(charged.rows[0].cents) - Number(reconciliation?.refunded_cents || 0);
+      const totalPaid = (Math.max(0, paidCents) / 100).toFixed(2);
+      // Same amount finalizeCompletion credits to the worker's wallet.
+      const workerReceives = workerNetFromGross(getEffectiveBookingPrice(payoutBooking)).toFixed(2);
       sendEmail(b.client_email, "jobCompleted", [b.client_name, b.title, b.worker_name, totalPaid, id, "client"], clientLang);
       sendEmail(b.worker_email, "jobCompleted", [b.worker_name, b.title, b.client_name, workerReceives, id, "worker"], workerLang);
 
