@@ -75,6 +75,23 @@ export async function uploadListingImage(
 }
 
 /**
+ * Uploads a cropped avatar or portfolio photo (data: URL from the crop
+ * pipeline) and returns its public URL. These used to be saved as base64 in the
+ * users row, which was then sent with every notification poll, conversation
+ * list and listing: most of the project's database egress.
+ */
+export async function uploadUserImage(dataUrl: string, kind: "avatar" | "portfolio"): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error("Not authenticated");
+
+  const blob = dataUrlToBlob(dataUrl);
+  const ext = blob.type === "image/webp" ? "webp" : "jpg";
+  // RLS requires the first folder segment to match the uploader's uid.
+  return upload(`${userId}/${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`, blob);
+}
+
+/**
  * Maps a card image URL to its uncropped companion. Returns the URL unchanged for
  * anything we did not upload this way (legacy base64 listings, or photos stored
  * before full versions were kept) — callers should fall back to it if it 404s.

@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatUnreadMessagePreview } from '@/lib/messagePreview';
 import { getLanguageCode } from '@/lib/locale';
+import { setVisibleInterval } from "@/lib/visibleInterval";
 
 export interface UnreadChat {
   id: string;
@@ -124,10 +125,10 @@ export function useUnreadMessages() {
 
     // Poll every 30 s instead of keeping a Supabase Realtime channel open on every page.
     // The messages page (useChats/useMessages) keeps its own realtime channel for instant updates.
-    const interval = setInterval(() => fetchSummary(true), 30_000);
+    const stopPolling = setVisibleInterval(() => fetchSummary(true), 30_000);
 
     return () => {
-      clearInterval(interval);
+      stopPolling();
     };
   }, [user, session, formatMessagePreview, languageCode]);
 

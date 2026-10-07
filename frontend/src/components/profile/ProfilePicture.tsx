@@ -7,6 +7,7 @@ import { Camera } from "lucide-react";
 import type { Area } from "react-easy-crop";
 import ImageCropModal from "@/components/ui/ImageCropModal";
 import getCroppedImg from "@/utils/cropImage";
+import { uploadUserImage } from "@/lib/listingImages";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -60,7 +61,7 @@ export default function ProfilePictureUploader({
             if (!imageToCrop) return;
             try {
             const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
-            onProfileChange(croppedImage);
+            onProfileChange(await uploadUserImage(croppedImage, "avatar"));
             setShowCropper(false);
             setImageToCrop(null);
             } catch {

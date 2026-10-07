@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePathname } from 'next/navigation';
+import { setVisibleInterval } from "@/lib/visibleInterval";
 
 const WALLET_SEEN_KEY = (userId: string) => `wallet_seen_total_${userId}`;
 
@@ -28,8 +29,7 @@ export function useWalletBadge() {
     };
 
     check();
-    const interval = setInterval(check, 60_000);
-    return () => clearInterval(interval);
+    return setVisibleInterval(check, 60_000);
   }, [user?.id, session?.access_token]);
 
   // Clear badge when user visits /wallet
