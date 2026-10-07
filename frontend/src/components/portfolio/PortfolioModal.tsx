@@ -10,7 +10,9 @@ import AppImage from "@/components/ui/AppImage";
 import type { Area } from "react-easy-crop";
 import ImageCropModal from "@/components/ui/ImageCropModal";
 import getCroppedImg from "@/utils/cropImage";
+import { uploadUserImage } from "@/lib/listingImages";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
 interface PortfolioModalProps {
   open: boolean;
@@ -45,10 +47,14 @@ export default function PortfolioModal({ open, onClose, onSave }: PortfolioModal
 
   const confirmCrop = async (croppedAreaPixels: Area) => {
     if (!rawImage) return;
-    const cropped = await getCroppedImg(rawImage, croppedAreaPixels);
-    setImage(cropped);
-    setShowCropper(false);
-    setRawImage(null);
+    try {
+      const cropped = await getCroppedImg(rawImage, croppedAreaPixels);
+      setImage(await uploadUserImage(cropped, "portfolio"));
+      setShowCropper(false);
+      setRawImage(null);
+    } catch {
+      toast.error(t("profile.uploadError"));
+    }
   };
 
   const handleSave = async () => {

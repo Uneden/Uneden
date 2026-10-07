@@ -68,6 +68,7 @@ import {
   CarouselPrevious,
   type CarouselApi,
 } from "@/components/ui/carousel";
+import { setVisibleInterval } from "@/lib/visibleInterval";
 
 type BookingStatus = "pending" | "negotiating" | "accepted" | "active" | "completed" | "cancelled" | "rejected";
 type BookingStep = "detail" | "payment" | "review" | "dispute" | "cancel";
@@ -432,8 +433,7 @@ export default function BookingDetailModal({
       }
     };
     poll();
-    const interval = setInterval(poll, 3500);
-    return () => clearInterval(interval);
+    return setVisibleInterval(poll, 3500);
   }, [refreshBookingFromApi]);
 
   useEffect(() => {

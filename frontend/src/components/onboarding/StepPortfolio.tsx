@@ -9,6 +9,7 @@ import AppImage from "@/components/ui/AppImage";
 import type { Area } from "react-easy-crop";
 import ImageCropModal from "@/components/ui/ImageCropModal";
 import getCroppedImg from "@/utils/cropImage";
+import { uploadUserImage } from "@/lib/listingImages";
 import { PortfolioItem } from "./onboardingTypes";
 import { toast } from "sonner";
 
@@ -49,7 +50,8 @@ export default function StepPortfolio({ portfolio, accountType, onAdd, onRemove,
     }
     try {
       const cropped = await getCroppedImg(rawImage, croppedPixels);
-      onAdd({ id: portfolio.length + 1, image: cropped, title: title.trim(), description: "" });
+      const image = await uploadUserImage(cropped, "portfolio");
+      onAdd({ id: portfolio.length + 1, image, title: title.trim(), description: "" });
       closeModal();
     } catch {
       toast.error(t('onboarding.cropImageFailed'));

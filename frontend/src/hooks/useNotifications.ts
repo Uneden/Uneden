@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { setVisibleInterval } from "@/lib/visibleInterval";
 
 export interface AppNotification {
   id: string;
@@ -41,8 +42,7 @@ export function useNotifications() {
   useEffect(() => {
     if (!token) return;
     fetchNotifications();
-    const id = setInterval(fetchNotifications, 30_000);
-    return () => clearInterval(id);
+    return setVisibleInterval(fetchNotifications, 30_000);
   }, [token, fetchNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;

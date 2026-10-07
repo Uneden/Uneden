@@ -14,6 +14,7 @@ import {
   parseHoursMinutesInput,
   partsToInputStrings,
 } from "@/lib/workHours";
+import { setVisibleInterval } from "@/lib/visibleInterval";
 
 export type WorkSession = {
   id: string;
@@ -127,8 +128,7 @@ export default function WorkSessionsPanel({
   useEffect(() => {
     if (!isHourly || !session?.access_token) return;
     const poll = () => load({ silent: true });
-    const interval = setInterval(poll, LIVE_POLL_MS);
-    return () => clearInterval(interval);
+    return setVisibleInterval(poll, LIVE_POLL_MS);
   }, [isHourly, session?.access_token, load]);
 
   useEffect(() => {

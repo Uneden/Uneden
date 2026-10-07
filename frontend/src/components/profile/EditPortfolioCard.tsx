@@ -7,6 +7,7 @@ import { Trash2, Plus, Pencil } from "lucide-react";
 import type { Area } from "react-easy-crop";
 import ImageCropModal from "@/components/ui/ImageCropModal";
 import getCroppedImg from "@/utils/cropImage";
+import { uploadUserImage } from "@/lib/listingImages";
 import { toast } from "sonner";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { useTranslation } from "react-i18next";
@@ -58,7 +59,7 @@ export default function EditPortfolioCard({ portfolio, isPerson, onAdd, onUpdate
   const handleCropSave = async (croppedAreaPixels: Area) => {
     if (!image || !title.trim()) { setError(true); return; }
     try {
-      const nextImage = await getCroppedImg(image, croppedAreaPixels);
+      const nextImage = await uploadUserImage(await getCroppedImg(image, croppedAreaPixels), "portfolio");
       if (selectedItem) {
         onUpdate({ ...selectedItem, image: nextImage, title: title.trim() });
       } else {

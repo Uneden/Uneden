@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { setVisibleInterval } from "@/lib/visibleInterval";
 
 export interface BookingNotif {
   id: string;
@@ -83,13 +84,13 @@ export function useUnreadBookings() {
     fetchNotifs();
 
     // Poll every 30 s instead of keeping a Supabase Realtime channel open on every page.
-    const interval = setInterval(() => fetchNotifs(), 30_000);
+    const stopPolling = setVisibleInterval(() => fetchNotifs(), 30_000);
 
     const onSeenUpdated = () => fetchNotifs();
     window.addEventListener("bookings-seen-updated", onSeenUpdated);
 
     return () => {
-      clearInterval(interval);
+      stopPolling();
       window.removeEventListener("bookings-seen-updated", onSeenUpdated);
     };
   }, [user, fetchNotifs]);

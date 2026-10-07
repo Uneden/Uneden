@@ -8,7 +8,9 @@ const API_URL = SERVER_API_URL;
 
 async function fetchInitialListings(): Promise<HomeListing[]> {
   try {
-    const res = await fetch(`${API_URL}/services?limit=12`, { cache: "no-store" });
+    // Cached for a minute: with no-store every home page hit (bots, uptime
+    // checks included) re-read 12 listings from the database.
+    const res = await fetch(`${API_URL}/services?limit=12`, { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? (data as HomeListing[]) : [];
