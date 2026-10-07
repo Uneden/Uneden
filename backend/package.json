@@ -7,7 +7,7 @@
     "test": "node tests/security.test.js",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "dev": "nodemon --import ./src/instrument.js src/server.js",
+    "dev": "node --watch --import ./src/instrument.js src/server.js",
     "start": "node --import ./src/instrument.js src/server.js"
   },
   "keywords": [],
@@ -28,7 +28,6 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.4",
     "pg": "^8.16.3",
     "postgres": "^3.4.7",
     "react": "^18.3.1",
@@ -38,10 +37,10 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10",
     "vitest": "^4.1.2"
   },
   "overrides": {
-    "iconv-lite": "0.6.3"
+    "iconv-lite": "0.6.3",
+    "uuid": "^11.1.1"
   }
 }
