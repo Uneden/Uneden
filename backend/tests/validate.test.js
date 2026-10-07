@@ -30,6 +30,26 @@ describe('stripHtml', () => {
     expect(stripHtml(42)).toBe(42);
     expect(stripHtml(null)).toBe(null);
   });
+
+  it.each([
+    'a < b and c > d',
+    '5 < 6',
+    '<a <b>c',
+    'x<>y',
+    '<<b>>',
+    'tag <unclosed',
+    '<p>one</p><p>two',
+    'no tags at all',
+    '',
+  ])('matches the former /<[^>]*>/g regex on %j', (input) => {
+    expect(stripHtml(input)).toBe(input.replace(/<[^>]*>/g, '').trim());
+  });
+
+  it('stays linear on "<<<<…" (ReDoS)', () => {
+    const start = performance.now();
+    stripHtml('<'.repeat(200_000));
+    expect(performance.now() - start).toBeLessThan(500);
+  });
 });
 
 // ── sanitizeText ─────────────────────────────────────────────────────────────

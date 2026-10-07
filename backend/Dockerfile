@@ -19,6 +19,12 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# Apply Debian security fixes published since the base image was built
+# (Trivy fails the build on fixable CRITICAL CVEs, e.g. perl-base).
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
 # Pull in the already-installed node_modules, then the source.
 # --chown sets ownership at copy time: no extra layer, no slow chown -R.
 COPY --chown=node:node --from=deps /app/node_modules ./node_modules
