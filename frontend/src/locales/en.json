@@ -661,7 +661,7 @@
     "adjustImage": "Adjust image",
     "saveImage": "Save",
     "uploadImageTypeError": "Please upload an image.",
-    "uploadImageSizeError": "File size must be less than 5MB.",
+    "uploadImageSizeError": "File size must be less than 20MB.",
     "cropImageError": "Failed to crop image. Please try again.",
     "uploadImageError": "Failed to upload image. Please try again.",
     "uploadServiceImage": "Upload Service Image",

@@ -53,6 +53,7 @@ import {
   WORKER_PAYOUT_SHARE,
   workerCommissionFromNet,
 } from "../utils/commissionRates.js";
+import { normalizeProvinceCode } from "../utils/taxProvince.js";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 // Tax rates by Canadian province
@@ -88,26 +89,8 @@ const PROVINCE_TAX_LABELS = {
   YT: "GST (5%)",
 };
 
-const PROVINCE_NAME_TO_CODE = {
-  "alberta": "AB",
-  "british columbia": "BC", "colombie-britannique": "BC",
-  "manitoba": "MB",
-  "new brunswick": "NB", "nouveau-brunswick": "NB",
-  "newfoundland and labrador": "NL", "terre-neuve-et-labrador": "NL",
-  "nova scotia": "NS", "nouvelle-écosse": "NS",
-  "northwest territories": "NT", "territoires du nord-ouest": "NT",
-  "nunavut": "NU",
-  "ontario": "ON",
-  "prince edward island": "PE", "île-du-prince-édouard": "PE",
-  "quebec": "QC", "québec": "QC",
-  "saskatchewan": "SK",
-  "yukon": "YT",
-};
-
 function normalizeProvince(province) {
-  if (!province) return "QC";
-  if (PROVINCE_TAX_RATES[province.toUpperCase()]) return province.toUpperCase();
-  return PROVINCE_NAME_TO_CODE[province.toLowerCase()] ?? "QC";
+  return normalizeProvinceCode(province) ?? "QC";
 }
 
 function getTaxRate(province) {

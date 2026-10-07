@@ -3,30 +3,50 @@ const PROVINCE_TAX_RATES = {
   NT: 0.05, NU: 0.05, ON: 0.13, PE: 0.15, QC: 0.14975, SK: 0.11, YT: 0.05,
 };
 
+/** Keys are folded with foldProvinceName (no accents, hyphens → spaces). */
 const PROVINCE_NAME_TO_CODE = {
   alberta: "AB",
   "british columbia": "BC",
-  "colombie-britannique": "BC",
+  "colombie britannique": "BC",
   manitoba: "MB",
   "new brunswick": "NB",
-  "nouveau-brunswick": "NB",
+  "nouveau brunswick": "NB",
   "newfoundland and labrador": "NL",
+  "terre neuve et labrador": "NL",
+  newfoundland: "NL",
   "nova scotia": "NS",
+  "nouvelle ecosse": "NS",
   "northwest territories": "NT",
+  "territoires du nord ouest": "NT",
   nunavut: "NU",
   ontario: "ON",
   "prince edward island": "PE",
+  "ile du prince edouard": "PE",
   quebec: "QC",
-  québec: "QC",
   saskatchewan: "SK",
   yukon: "YT",
 };
 
+function foldProvinceName(value) {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[\s.-]+/g, " ")
+    .trim();
+}
+
+/**
+ * Two-letter province code ("QC") from a code or an English/French name, or
+ * null when unrecognised. Callers store the result in char(2) columns
+ * (billing_addresses.province, bookings.client_province), so never return
+ * anything else.
+ */
 export function normalizeProvinceCode(province) {
   if (!province) return null;
   const upper = String(province).trim().toUpperCase();
   if (PROVINCE_TAX_RATES[upper] !== undefined) return upper;
-  return PROVINCE_NAME_TO_CODE[String(province).trim().toLowerCase()] ?? null;
+  return PROVINCE_NAME_TO_CODE[foldProvinceName(province)] ?? null;
 }
 
 export function getTaxRateForProvince(province) {

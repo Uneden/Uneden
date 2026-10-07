@@ -80,6 +80,32 @@ export function normalizeMobility(raw) {
   return trimmed;
 }
 
+/** Sizes of the bounded varchar columns of services (supabase/migrations). */
+export const SERVICE_TEXT_LIMITS = {
+  poster_type: 20,
+  availability: 50,
+  language: 50,
+  mobility: 50,
+  urgency: 50,
+  duration: 100,
+};
+
+/**
+ * Error message for the first value (as it will be stored) too long for its
+ * column, so the API answers 400 instead of failing the INSERT with a 500.
+ * @param {Record<string, unknown>} values
+ * @returns {string | null}
+ */
+export function serviceTextLengthError(values) {
+  for (const [field, max] of Object.entries(SERVICE_TEXT_LIMITS)) {
+    const value = values[field];
+    if (value != null && String(value).length > max) {
+      return `${field} must be at most ${max} characters`;
+    }
+  }
+  return null;
+}
+
 /**
  * Harmonise les champs sur une ligne service (réponses API).
  * @param {Record<string, unknown>} row

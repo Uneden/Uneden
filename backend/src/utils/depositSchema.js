@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { normalizePricingMode } from "./servicePricing.js";
 
+/** Same cap as listing prices (servicePricing.js). */
+export const MAX_FIXED_DEPOSIT = 1_000_000;
+
 let schemaReady = false;
 /** Single in-flight migration — avoids concurrent ALTER TABLE deadlocks with read queries. */
 let schemaInitPromise = null;
@@ -282,6 +285,10 @@ export function parseDepositFields(body, servicePrice = null, pricingMode = "fix
   }
   if (type === "percent" && (value <= 0 || value >= 100)) {
     return { error: "Deposit percentage must be between 1 and 99" };
+  }
+  // Quote listings have no price to bound the deposit; deposit_value is numeric(10,2).
+  if (type === "fixed" && value > MAX_FIXED_DEPOSIT) {
+    return { error: "Deposit too high" };
   }
 
   const mode = normalizePricingMode(pricingMode);

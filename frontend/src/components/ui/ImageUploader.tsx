@@ -7,7 +7,7 @@ import AppImage from "@/components/ui/AppImage";
 import { Upload, Trash2 } from "lucide-react";
 import type { Area } from "react-easy-crop";
 import ImageCropModal from "@/components/ui/ImageCropModal";
-import getCroppedImg from "@/utils/cropImage";
+import getCroppedImg, { MAX_SOURCE_IMAGE_BYTES } from "@/utils/cropImage";
 import { toast } from "sonner";
 
 interface ImageUploaderProps {
@@ -37,7 +37,7 @@ export default function ImageUploader({
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
       toast.error(t('post.uploadImageSizeError'));
       return;
     }

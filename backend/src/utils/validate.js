@@ -7,7 +7,20 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 /** Strip all HTML tags from a string */
 export function stripHtml(str) {
   if (typeof str !== "string") return str;
-  return str.replace(/<[^>]*>/g, "").trim();
+  // Same result as str.replace(/<[^>]*>/g, ""), but linear: that regex
+  // backtracks quadratically on input like "<<<<…" (ReDoS, CodeQL
+  // js/polynomial-redos). A "<" with no ">" after it is kept, as before.
+  let out = "";
+  let i = 0;
+  while (i < str.length) {
+    const open = str.indexOf("<", i);
+    if (open === -1) break;
+    const close = str.indexOf(">", open + 1);
+    if (close === -1) break;
+    out += str.slice(i, open);
+    i = close + 1;
+  }
+  return (out + str.slice(i)).trim();
 }
 
 /** Sanitize a plain-text field — strip HTML and trim */
