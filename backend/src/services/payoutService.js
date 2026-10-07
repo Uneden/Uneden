@@ -1,7 +1,6 @@
 import pool from "../config/db.js";
 import {
   WORKER_COMMISSION_RATE,
-  WORKER_PAYOUT_SHARE,
   workerCommissionFromNet,
   grossFromWorkerNet,
 } from "../utils/commissionRates.js";
@@ -9,6 +8,8 @@ import stripe from "../config/stripe.js";
 import { notifyPayoutReceived } from "./emailService.js";
 import { createNotification, getUserLang } from "./notificationService.js";
 import { recordWorkerPayoutLedger } from "./ledgerService.js";
+import { withTransaction } from "./paymentGuards.js";
+import { finalizeCompletion } from "../controllers/bookingController.js";
 
 const MIN_BUSINESS_DAYS = 5;             // money must sit 5 business days before payout
 
@@ -60,9 +61,32 @@ export function isPayoutDay(date = new Date()) {
 
 // ─── Payout logic ─────────────────────────────────────────────────────────────
 
+// Booking payment states whose worker credit can be paid out.
+const PAYABLE_PAYMENT_STATUSES = ["paid", "refunded", "deposit_paid"];
+
+/**
+ * Bookings whose worker credit can be paid out: completed work, or a client
+ * cancellation where the worker keeps the deposit (status cancelled). Bookings
+ * with an open dispute wait for its outcome.
+ */
+const PAYABLE_BOOKING_SQL = `
+  b.status IN ('completed', 'cancelled')
+  AND b.payment_status = ANY($PAYABLE::text[])
+  AND EXISTS (
+    SELECT 1 FROM payments p
+    WHERE p.booking_id = b.id AND p.status IN ('paid', 'refunded')
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM disputes d WHERE d.booking_id = b.id AND d.status = 'open'
+  )`;
+
 /**
  * Process bi-weekly payout for one user.
  * Transfers the worker's net share of eligible service earnings to their Stripe Connect account.
+ *
+ * Each booking is claimed (payment_status → transferred) before its transfer
+ * and the transfer carries an idempotency key, so concurrent runs (cron +
+ * admin trigger, a retried run) can't pay the same booking twice.
  */
 export async function processUserPayout(userId) {
   // Get Stripe Connect account + worker info
@@ -95,6 +119,7 @@ export async function processUserPayout(userId) {
   // Find all unpaid worker credit transactions older than MIN_BUSINESS_DAYS business days
   const creditsResult = await pool.query(
     `SELECT t.id AS tx_id, t.amount, t.booking_id, t.created_at,
+            b.payment_status AS previous_payment_status,
             (
               SELECT p.stripe_payment_intent_id
               FROM payments p
@@ -109,15 +134,10 @@ export async function processUserPayout(userId) {
      WHERE t.user_id = $1
        AND t.type = 'credit'
        AND b.worker_id = $1
-       AND b.status = 'completed'
-       AND b.payment_status = ANY($3::text[])
-       AND EXISTS (
-         SELECT 1 FROM payments p
-         WHERE p.booking_id = b.id AND p.status IN ('paid', 'refunded')
-       )
+       AND ${PAYABLE_BOOKING_SQL.replace("$PAYABLE", "$3")}
        AND t.created_at <= $2
      ORDER BY t.created_at ASC`,
-    [userId, eligibilityCutoff.toISOString(), ["paid", "refunded", "deposit_paid"]]
+    [userId, eligibilityCutoff.toISOString(), PAYABLE_PAYMENT_STATUSES]
   );
 
   if (creditsResult.rows.length === 0) return null;
@@ -128,82 +148,101 @@ export async function processUserPayout(userId) {
   for (const row of creditsResult.rows) {
     // Credit amount is already net (gross × WORKER_PAYOUT_SHARE) — transfer it as-is
     const transferCents = Math.round(Number(row.amount) * 100);
+    if (transferCents <= 0) continue;
+
+    // Claim the booking: a concurrent run finds it no longer payable.
+    const claim = await pool.query(
+      `UPDATE bookings SET payment_status = 'transferred'
+       WHERE id = $1 AND payment_status = ANY($2::text[])
+       RETURNING id`,
+      [row.booking_id, PAYABLE_PAYMENT_STATUSES],
+    );
+    if (claim.rows.length === 0) continue;
 
     // source_transaction requires a charge ID (ch_xxx), not a payment intent ID (pi_xxx).
     // Resolve the PI to its underlying charge before transferring.
     let sourceTransaction = row.stripe_payment_intent_id;
-    if (sourceTransaction && sourceTransaction.startsWith("pi_")) {
-      try {
+    let transfer;
+    try {
+      if (sourceTransaction && sourceTransaction.startsWith("pi_")) {
         const pi = await stripe.paymentIntents.retrieve(sourceTransaction);
         const chargeId = typeof pi.latest_charge === "object"
           ? pi.latest_charge?.id
           : pi.latest_charge;
         if (chargeId) sourceTransaction = chargeId;
-      } catch (piErr) {
-        console.error(`[Payout] Could not resolve charge for PI ${sourceTransaction}:`, piErr.message);
       }
-    }
 
-    try {
-      const transfer = await stripe.transfers.create({
-        amount: transferCents,
-        currency: "cad",
-        destination: stripeAccountId,
-        source_transaction: sourceTransaction,
-        description: `Versement bi-mensuel — réservation ${row.booking_id}`,
-        metadata: {
-          booking_id: String(row.booking_id),
-          worker_id: String(userId),
-          transfer_type: "biweekly_payout",
+      transfer = await stripe.transfers.create(
+        {
+          amount: transferCents,
+          currency: "cad",
+          destination: stripeAccountId,
+          source_transaction: sourceTransaction,
+          description: `Versement bi-mensuel — réservation ${row.booking_id}`,
+          metadata: {
+            booking_id: String(row.booking_id),
+            worker_id: String(userId),
+            transfer_type: "biweekly_payout",
+          },
         },
-      });
-
-      // Mark booking + payment as transferred
-      await pool.query(
-        "UPDATE bookings SET payment_status = 'transferred' WHERE id = $1",
-        [row.booking_id]
+        { idempotencyKey: `payout:${row.booking_id}:${row.tx_id}` },
       );
-      await pool.query(
-        "UPDATE payments SET status = 'transferred', updated_at = NOW() WHERE booking_id = $1 AND status IN ('paid', 'refunded')",
-        [row.booking_id]
-      );
-
-      const workerCommission = workerCommissionFromNet(transferCents / 100).toFixed(2);
-      await pool.query(
-        `INSERT INTO platform_earnings (booking_id, type, amount, description)
-         VALUES ($1, 'worker_commission', $2, $3)`,
-        [row.booking_id, workerCommission, `Commission vendeur ${WORKER_COMMISSION_RATE * 100}% au versement`]
-      );
-
-      await recordWorkerPayoutLedger({
-        bookingId: row.booking_id,
-        workerId: userId,
-        transferId: transfer.id,
-        transferCents,
-        workerCommissionCents: Math.round(Number(workerCommission) * 100),
-        description: `Versement bi-mensuel — réservation ${row.booking_id}`,
-      });
-
-      totalTransferredCents += transferCents;
-      processedBookings.push(row.booking_id);
     } catch (err) {
       console.error(`[Payout] Transfer failed for booking ${row.booking_id}:`, err.message);
+      // Release the claim so the next run retries this booking.
+      await pool.query(
+        `UPDATE bookings SET payment_status = $2 WHERE id = $1 AND payment_status = 'transferred'`,
+        [row.booking_id, row.previous_payment_status],
+      ).catch((releaseErr) =>
+        console.error(`[Payout] Could not release booking ${row.booking_id}:`, releaseErr.message),
+      );
+      continue;
     }
+
+    const workerCommission = workerCommissionFromNet(transferCents / 100).toFixed(2);
+    try {
+      // Bookkeeping for this transfer: all of it or none.
+      await withTransaction(async (db) => {
+        // stripe_transfer_id lets a later dispute refund reverse the transfer.
+        await db.query(
+          `UPDATE payments SET status = 'transferred', stripe_transfer_id = $2, updated_at = NOW()
+           WHERE booking_id = $1 AND status IN ('paid', 'refunded')`,
+          [row.booking_id, transfer.id],
+        );
+        await db.query(
+          `INSERT INTO platform_earnings (booking_id, type, amount, description)
+           VALUES ($1, 'worker_commission', $2, $3)
+           ON CONFLICT (booking_id, type) DO NOTHING`,
+          [row.booking_id, workerCommission, `Commission vendeur ${WORKER_COMMISSION_RATE * 100}% au versement`],
+        );
+        await recordWorkerPayoutLedger({
+          bookingId: row.booking_id,
+          workerId: userId,
+          transferId: transfer.id,
+          transferCents,
+          workerCommissionCents: Math.round(Number(workerCommission) * 100),
+          description: `Versement bi-mensuel — réservation ${row.booking_id}`,
+        }, db);
+        await db.query(
+          `UPDATE wallets SET balance = GREATEST(0, balance - $1), updated_at = NOW() WHERE user_id = $2`,
+          [transferCents / 100, userId],
+        );
+      });
+    } catch (err) {
+      // The money left and the booking stays claimed (no second transfer);
+      // only the bookkeeping above is missing and needs a manual fix.
+      console.error(`[Payout] Transfer ${transfer.id} sent but bookkeeping failed for booking ${row.booking_id}:`, err);
+    }
+
+    totalTransferredCents += transferCents;
+    processedBookings.push(row.booking_id);
   }
 
   if (processedBookings.length === 0) return null;
 
   const totalTransferredDollars = (totalTransferredCents / 100);
 
-  // Deduct payout amount from wallet balance
-  await pool.query(
-    `UPDATE wallets
-     SET balance = GREATEST(0, balance - $1), updated_at = NOW()
-     WHERE user_id = $2`,
-    [totalTransferredDollars, userId]
-  );
-
-  // Record the payout debit transaction
+  // Record the payout debit transaction (wallet already reduced per booking)
   await pool.query(
     `INSERT INTO transactions (user_id, type, amount, description)
      VALUES ($1, 'debit', $2, 'Versement bi-mensuel automatique')`,
@@ -217,7 +256,6 @@ export async function processUserPayout(userId) {
     (await getUserLang(userId)) === "en" ? "en-CA" : "fr-CA",
     { weekday: "long", year: "numeric", month: "long", day: "numeric" },
   );
-
 
   if (workerEmail) {
     const lang = await getUserLang(userId);
@@ -234,15 +272,14 @@ export async function processUserPayout(userId) {
 
 /**
  * Recover any completed bookings whose credit transaction was never inserted
- * (e.g. finalizeCompletion failed silently due to a DB hiccup).
- * Safe to call multiple times — guarded by NOT EXISTS.
+ * (e.g. finalizeCompletion failed silently due to a DB hiccup). Goes through
+ * finalizeCompletion itself, so the amount is computed the same way (hourly,
+ * agreed range price…) and the unique credit index keeps it idempotent.
  */
 async function recoverMissingCredits() {
-  // Find completed+paid bookings with no credit transaction and insert them
   const missing = await pool.query(
-    `SELECT b.id, b.worker_id, b.client_id,
-            COALESCE(b.custom_price, s.price) * ${WORKER_PAYOUT_SHARE} AS worker_receives,
-            s.title,
+    `SELECT b.*, s.title, s.pricing_mode AS service_pricing_mode,
+            s.estimated_hours AS service_estimated_hours, s.price AS service_price,
             CASE WHEN uc.account_type = 'company' THEN uc.company_name ELSE uc.full_name END AS client_name
      FROM bookings b
      JOIN services s ON b.service_id = s.id
@@ -250,69 +287,60 @@ async function recoverMissingCredits() {
      WHERE b.status = 'completed'
        AND b.payment_status = 'paid'
        AND NOT EXISTS (
-         SELECT 1 FROM transactions t WHERE t.booking_id = b.id AND t.type = 'credit'
+         SELECT 1 FROM transactions t WHERE t.booking_id = b.id AND t.type = 'credit' AND t.user_id = b.worker_id
        )`
   );
 
-  if (missing.rows.length === 0) return;
-
-
-  for (const row of missing.rows) {
+  for (const booking of missing.rows) {
     try {
-      await pool.query(
-        `INSERT INTO transactions (user_id, booking_id, type, amount, description, other_user_name, listing_title)
-         VALUES ($1, $2, 'credit', $3, 'Paiement reçu pour travail complété', $4, $5)`,
-        [row.worker_id, row.id, row.worker_receives, row.client_name, row.title]
-      );
-      await pool.query(
-        `INSERT INTO wallets (user_id, balance, total_earned)
-         VALUES ($1, $2, $2)
-         ON CONFLICT (user_id) DO UPDATE
-         SET balance = wallets.balance + $2, total_earned = wallets.total_earned + $2, updated_at = NOW()`,
-        [row.worker_id, row.worker_receives]
-      );
+      await finalizeCompletion(booking);
     } catch (err) {
-      console.error(`[Payout] Failed to recover credit for booking ${row.id}:`, err.message);
+      console.error(`[Payout] Failed to recover credit for booking ${booking.id}:`, err.message);
     }
   }
 }
 
+let payoutRunInProgress = false;
+
 /**
  * Process bi-weekly payouts for all eligible workers.
+ * @returns {Promise<{ skipped?: boolean, workers?: number }>}
  */
 export async function processAllPayouts() {
+  // Cron and admin trigger in the same process: one run at a time. The
+  // per-booking claim covers runs in different processes.
+  if (payoutRunInProgress) return { skipped: true };
+  payoutRunInProgress = true;
+  try {
+    // Recover any bookings where finalizeCompletion failed silently
+    await recoverMissingCredits().catch((err) =>
+      console.error("[Payout] recoverMissingCredits failed:", err.message)
+    );
 
-  // Recover any bookings where finalizeCompletion failed silently
-  await recoverMissingCredits().catch((err) =>
-    console.error("[Payout] recoverMissingCredits failed:", err.message)
-  );
+    const eligibilityCutoff = subtractBusinessDays(new Date(), MIN_BUSINESS_DAYS);
 
-  const eligibilityCutoff = subtractBusinessDays(new Date(), MIN_BUSINESS_DAYS);
+    const workers = await pool.query(
+      `SELECT DISTINCT t.user_id
+       FROM transactions t
+       JOIN bookings b ON b.id = t.booking_id
+       WHERE t.type = 'credit'
+         AND b.worker_id = t.user_id
+         AND ${PAYABLE_BOOKING_SQL.replace("$PAYABLE", "$2")}
+         AND t.created_at <= $1`,
+      [eligibilityCutoff.toISOString(), PAYABLE_PAYMENT_STATUSES]
+    );
 
-  const workers = await pool.query(
-    `SELECT DISTINCT t.user_id
-     FROM transactions t
-     JOIN bookings b ON b.id = t.booking_id
-     WHERE t.type = 'credit'
-       AND b.worker_id = t.user_id
-       AND b.status = 'completed'
-       AND b.payment_status = ANY($2::text[])
-       AND EXISTS (
-         SELECT 1 FROM payments p
-         WHERE p.booking_id = b.id AND p.status IN ('paid', 'refunded')
-       )
-       AND t.created_at <= $1`,
-    [eligibilityCutoff.toISOString(), ["paid", "refunded", "deposit_paid"]]
-  );
-
-  let processed = 0;
-  for (const { user_id } of workers.rows) {
-    try {
-      const result = await processUserPayout(user_id);
-      if (result) processed++;
-    } catch (err) {
-      console.error(`[Payout] Error for user ${user_id}:`, err.message);
+    let processed = 0;
+    for (const { user_id } of workers.rows) {
+      try {
+        const result = await processUserPayout(user_id);
+        if (result) processed++;
+      } catch (err) {
+        console.error(`[Payout] Error for user ${user_id}:`, err.message);
+      }
     }
+    return { workers: processed };
+  } finally {
+    payoutRunInProgress = false;
   }
-
 }

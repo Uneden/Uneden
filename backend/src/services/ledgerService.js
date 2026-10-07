@@ -69,12 +69,12 @@ export async function recordLedgerEntry({
   stripeObjectType = null,
   description = null,
   metadata = {},
-}) {
+}, db = pool) {
   await ensureLedgerSchema();
   if (!entryType || !Number.isFinite(amountCents) || amountCents === 0) return null;
 
   if (stripeObjectId) {
-    const existing = await pool.query(
+    const existing = await db.query(
       `SELECT id FROM ledger_entries
        WHERE stripe_object_id = $1 AND entry_type = $2`,
       [stripeObjectId, entryType],
@@ -82,11 +82,14 @@ export async function recordLedgerEntry({
     if (existing.rows.length > 0) return existing.rows[0].id;
   }
 
-  const result = await pool.query(
+  // ON CONFLICT: two concurrent deliveries of the same Stripe event both
+  // passing the SELECT above must not make the second one fail.
+  const result = await db.query(
     `INSERT INTO ledger_entries
        (booking_id, user_id, entry_type, amount_cents, currency,
         stripe_object_id, stripe_object_type, description, metadata)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (stripe_object_id, entry_type) WHERE stripe_object_id IS NOT NULL DO NOTHING
      RETURNING id`,
     [
       bookingId,
@@ -113,7 +116,7 @@ export async function recordClientPaymentLedger({
   taxesCents,
   paymentKind,
   title,
-}) {
+}, db = pool) {
   const baseId = paymentIntentId || `booking-${bookingId}`;
   await recordLedgerEntry({
     bookingId,
@@ -124,7 +127,7 @@ export async function recordClientPaymentLedger({
     stripeObjectType: "payment_intent",
     description: `Paiement client — ${title}`,
     metadata: { payment_kind: paymentKind, service_price_cents: servicePriceCents },
-  });
+  }, db);
 
   if (buyerCommissionCents > 0) {
     await recordLedgerEntry({
@@ -136,7 +139,7 @@ export async function recordClientPaymentLedger({
       stripeObjectType: "payment_intent",
       description: `Commission acheteur — ${title}`,
       metadata: { payment_kind: paymentKind },
-    });
+    }, db);
   }
 
   if (taxesCents > 0) {
@@ -149,7 +152,7 @@ export async function recordClientPaymentLedger({
       stripeObjectType: "payment_intent",
       description: `Taxes collectées — ${title}`,
       metadata: { payment_kind: paymentKind },
-    });
+    }, db);
   }
 
   if (servicePriceCents > 0 && paymentKind !== "deposit") {
@@ -162,7 +165,7 @@ export async function recordClientPaymentLedger({
       stripeObjectType: "payment_intent",
       description: `Passif travailleur (95%) — ${title}`,
       metadata: { service_price_cents: servicePriceCents },
-    });
+    }, db);
   }
 }
 
@@ -173,7 +176,7 @@ export async function recordWorkerPayoutLedger({
   transferCents,
   workerCommissionCents,
   description,
-}) {
+}, db = pool) {
   await recordLedgerEntry({
     bookingId,
     userId: workerId,
@@ -182,7 +185,7 @@ export async function recordWorkerPayoutLedger({
     stripeObjectId: transferId,
     stripeObjectType: "transfer",
     description,
-  });
+  }, db);
 
   if (workerCommissionCents > 0) {
     await recordLedgerEntry({
@@ -193,7 +196,7 @@ export async function recordWorkerPayoutLedger({
       stripeObjectId: `${transferId}:worker_commission`,
       stripeObjectType: "transfer",
       description: `Commission vendeur au versement`,
-    });
+    }, db);
   }
 }
 

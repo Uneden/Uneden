@@ -1,5 +1,6 @@
 import pool from "../config/db.js";
-import stripe from "../config/stripe.js";
+import { withTransaction } from "./paymentGuards.js";
+import { refundAcrossPayments } from "./refundService.js";
 import { workerNetFromGross } from "../utils/commissionRates.js";
 import { createLocalizedNotification } from "../services/notificationService.js";
 
@@ -94,17 +95,17 @@ export async function processDepositCancellationRefund({ bookingId, cancelledByU
     : roundCents(servicePriceCents * taxRate);
   const totalClientRefundCents = refundBaseCents + totalTaxesCents;
 
-  if (totalClientRefundCents > 0) {
-    await stripe.refunds.create({
-      payment_intent: row.stripe_payment_intent_id,
-      amount: totalClientRefundCents,
-    });
-  }
-
-  await pool.query(
-    `UPDATE payments SET status = 'refunded', updated_at = NOW() WHERE id = $1`,
-    [row.payment_id]
-  );
+  // Every charge of the booking (deposit + balance for hourly), not just the
+  // latest one; idempotent so a double click refunds once.
+  const payments = (
+    await pool.query(
+      `SELECT id, stripe_payment_intent_id FROM payments
+       WHERE booking_id = $1 AND status = 'paid' AND stripe_payment_intent_id IS NOT NULL
+       ORDER BY created_at DESC`,
+      [bookingId],
+    )
+  ).rows;
+  await refundAcrossPayments(payments, totalClientRefundCents, `deposit-cancel:${bookingId}`);
 
   const totalClientRefundDollars = roundDollars(totalClientRefundCents / 100);
   const commissionCents = roundCents(row.platform_fee);
@@ -114,51 +115,73 @@ export async function processDepositCancellationRefund({ bookingId, cancelledByU
       : (depositCents + commissionCents) / 100,
   );
 
-  // Update the original debit transaction to the net cost (deposit + commission)
-  // so the wallet shows a single entry instead of debit + credit
-  await pool.query(
-    `UPDATE transactions
-     SET amount = $1, description = 'Annulé — dépôt retenu'
-     WHERE booking_id = $2 AND user_id = $3 AND type = 'debit'`,
-    [netCostDollars, bookingId, row.client_id]
-  );
-
-  // Adjust total_spent to reflect only the net cost
-  await pool.query(
-    `UPDATE wallets
-     SET total_spent = GREATEST(0, total_spent - $1), updated_at = NOW()
-     WHERE user_id = $2`,
-    [totalClientRefundDollars, row.client_id]
-  );
-
-  await pool.query(
-    `UPDATE bookings SET status = 'cancelled', payment_status = 'refunded' WHERE id = $1`,
-    [bookingId]
-  );
-
-  if (workerDepositCents > 0) {
-    await pool.query(
-      `INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
-      [row.worker_id]
+  const applied = await withTransaction(async (db) => {
+    // Claim the cancellation: a concurrent request finds the booking no longer active.
+    const claimed = await db.query(
+      `UPDATE bookings SET status = 'cancelled', payment_status = 'refunded'
+       WHERE id = $1 AND status = 'active'
+       RETURNING id`,
+      [bookingId],
     );
-    const workerDepositDollars = roundDollars(workerDepositCents / 100);
-    await pool.query(
-      `UPDATE wallets SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+    if (claimed.rows.length === 0) return false;
+
+    await db.query(
+      `UPDATE payments SET status = 'refunded', updated_at = NOW()
+       WHERE booking_id = $1 AND status = 'paid'`,
+      [bookingId],
+    );
+
+    // Update the original debit transaction to the net cost (deposit + commission)
+    // so the wallet shows a single entry instead of debit + credit
+    await db.query(
+      `UPDATE transactions
+       SET amount = $1, description = 'Annulé — dépôt retenu'
+       WHERE booking_id = $2 AND user_id = $3 AND type = 'debit'`,
+      [netCostDollars, bookingId, row.client_id],
+    );
+
+    // Adjust total_spent to reflect only the net cost
+    await db.query(
+      `UPDATE wallets
+       SET total_spent = GREATEST(0, total_spent - $1), updated_at = NOW()
        WHERE user_id = $2`,
-      [workerDepositDollars, row.worker_id]
+      [totalClientRefundDollars, row.client_id],
     );
-    await pool.query(
-      `INSERT INTO transactions (user_id, booking_id, type, amount, description, other_user_name, listing_title)
-       VALUES ($1, $2, 'credit', $3, 'Dépôt retenu — annulation client', $4, $5)`,
-      [row.worker_id, bookingId, workerDepositDollars, row.client_name, row.service_title]
-    );
-  }
 
-  await pool.query(
-    `UPDATE calendar_events SET status = 'cancelled', updated_at = NOW()
-     WHERE booking_id = $1 AND status = 'scheduled'`,
-    [bookingId]
-  );
+    if (workerDepositCents > 0) {
+      const workerDepositDollars = roundDollars(workerDepositCents / 100);
+      await db.query(
+        `INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+        [row.worker_id],
+      );
+      const credit = await db.query(
+        `INSERT INTO transactions (user_id, booking_id, type, amount, description, other_user_name, listing_title)
+         VALUES ($1, $2, 'credit', $3, 'Dépôt retenu — annulation client', $4, $5)
+         ON CONFLICT (booking_id, user_id) WHERE type = 'credit' AND booking_id IS NOT NULL DO NOTHING
+         RETURNING id`,
+        [row.worker_id, bookingId, workerDepositDollars, row.client_name, row.service_title],
+      );
+      if (credit.rows.length > 0) {
+        await db.query(
+          `UPDATE wallets SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+           WHERE user_id = $2`,
+          [workerDepositDollars, row.worker_id],
+        );
+      }
+    }
+
+    await db.query(
+      `UPDATE calendar_events SET status = 'cancelled', updated_at = NOW()
+       WHERE booking_id = $1 AND status = 'scheduled'`,
+      [bookingId],
+    );
+    return true;
+  });
+  if (!applied) {
+    const err = new Error("This booking was already cancelled");
+    err.statusCode = 409;
+    throw err;
+  }
 
   createLocalizedNotification({
     userId: row.worker_id,

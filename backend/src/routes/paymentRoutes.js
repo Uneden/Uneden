@@ -6,8 +6,6 @@ import {
   getConnectConfig,
   getConnectStatus,
   syncConnectProfile,
-  createCheckoutSession,
-  releasePayment,
   refundPayment,
   getPaymentStatus,
   verifyPayment,
@@ -29,14 +27,12 @@ router.post("/connect/session", protect, createAccountSession);
 router.get("/connect/config", getConnectConfig);
 router.get("/connect/status", protect, getConnectStatus);
 router.post("/connect/sync-profile", protect, syncConnectProfile);
-router.post("/checkout", protect, createCheckoutSession);
 router.post("/intent", protect, createPaymentIntent);
 router.post("/intent/confirm", protect, confirmPaymentIntent);
 router.get("/payment-methods", protect, getPaymentMethods);
 router.post("/setup-intent", protect, createSetupIntent);
 router.delete("/payment-methods/:id", protect, deletePaymentMethod);
 router.post("/verify", protect, verifyPayment);
-router.post("/release", protect, releasePayment);
 router.post("/refund", protect, adminOnly, refundPayment);
 router.get("/status/:bookingId", protect, getPaymentStatus);
 

@@ -1,0 +1,31 @@
+name: Scheduled payouts
+
+# Render's free instance sleeps when idle, so the backend's in-process Friday
+# cron rarely fires and worker payouts never went out. This wakes the backend
+# and asks for the run; the backend only pays out on bi-weekly payout Fridays
+# and claims each booking before transferring, so a retry never pays twice.
+#
+# Needs the CRON_SECRET repository secret (same value as on Render).
+
+on:
+  schedule:
+    - cron: "10 16 * * 5" # Fridays 16:10 UTC, after the 16:00 UTC payout time
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  payout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger the payout run
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          API_URL: https://uneden.onrender.com
+        run: |
+          # Retries cover the cold start of the sleeping instance.
+          curl --fail-with-body --silent --show-error \
+            --retry 6 --retry-delay 30 --retry-all-errors --max-time 600 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "$API_URL/api/wallet/payout/scheduled"
