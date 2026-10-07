@@ -31,18 +31,19 @@ describe('stripHtml', () => {
     expect(stripHtml(null)).toBe(null);
   });
 
+  // Expected values are what the former /<[^>]*>/g implementation returned.
   it.each([
-    'a < b and c > d',
-    '5 < 6',
-    '<a <b>c',
-    'x<>y',
-    '<<b>>',
-    'tag <unclosed',
-    '<p>one</p><p>two',
-    'no tags at all',
-    '',
-  ])('matches the former /<[^>]*>/g regex on %j', (input) => {
-    expect(stripHtml(input)).toBe(input.replace(/<[^>]*>/g, '').trim());
+    ['a < b and c > d', 'a  d'],
+    ['5 < 6', '5 < 6'],
+    ['<a <b>c', 'c'],
+    ['x<>y', 'xy'],
+    ['<<b>>', '>'],
+    ['tag <unclosed', 'tag <unclosed'],
+    ['<p>one</p><p>two', 'onetwo'],
+    ['no tags at all', 'no tags at all'],
+    ['', ''],
+  ])('keeps the former behaviour on %j', (input, expected) => {
+    expect(stripHtml(input)).toBe(expected);
   });
 
   it('stays linear on "<<<<…" (ReDoS)', () => {
