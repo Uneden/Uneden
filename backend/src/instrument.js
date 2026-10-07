@@ -9,4 +9,7 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   tracesSampleRate: 0.1,
   environment: process.env.NODE_ENV || "production",
+  // Controllers catch their errors and answer 500 themselves, so the Express
+  // error handler never sees them: report every console.error instead.
+  integrations: [Sentry.captureConsoleIntegration({ levels: ["error"] })],
 });

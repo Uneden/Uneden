@@ -1,6 +1,8 @@
 import pool from "../config/db.js";
 import { resetStripeConnectAccount } from "../services/stripeConnectService.js";
 import { sanitizeText } from "../utils/validate.js";
+import { normalizeProvinceCode } from "../utils/taxProvince.js";
+import { normalizePostalCode, pickValidBillingFields } from "../utils/billingAddress.js";
 import { createClient } from '@supabase/supabase-js';
 import { sendWelcomeEmailOnce } from "../services/userWelcomeService.js";
 import { invalidateSuspendedCache } from "../middleware/authMiddleware.js";
@@ -17,45 +19,6 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   }
 });
 
-const PROVINCE_NAME_TO_CODE = {
-        alberta: "AB",
-        "british columbia": "BC",
-        "colombie-britannique": "BC",
-        manitoba: "MB",
-        "new brunswick": "NB",
-        "nouveau-brunswick": "NB",
-        "newfoundland and labrador": "NL",
-        "terre-neuve-et-labrador": "NL",
-        "nova scotia": "NS",
-        "nouvelle-ecosse": "NS",
-        "nouvelle-écosse": "NS",
-        "northwest territories": "NT",
-        "territoires du nord-ouest": "NT",
-        nunavut: "NU",
-        ontario: "ON",
-        "prince edward island": "PE",
-        "ile-du-prince-edouard": "PE",
-        "île-du-prince-édouard": "PE",
-        quebec: "QC",
-        québec: "QC",
-        saskatchewan: "SK",
-        yukon: "YT",
-};
-
-function normalizeProvinceCode(province) {
-        if (!province) return null;
-        const upper = String(province).toUpperCase();
-        if (upper.length === 2) return upper;
-        return PROVINCE_NAME_TO_CODE[String(province).toLowerCase()] ?? upper;
-}
-
-function normalizePostalCode(postalCode) {
-    if (!postalCode) return null;
-    const compact = String(postalCode).replace(/\s+/g, "").toUpperCase().slice(0, 6);
-    if (!compact) return null;
-    return compact.length > 3 ? `${compact.slice(0, 3)} ${compact.slice(3)}` : compact;
-}
-
 async function syncDefaultBillingAddress(client, {
     userId,
     fullName,
@@ -65,8 +28,15 @@ async function syncDefaultBillingAddress(client, {
     postalCode = "",
     createIfMissing = false,
 }) {
-    const normalizedProvince = normalizeProvinceCode(province);
-    const normalizedPostalCode = normalizePostalCode(postalCode);
+    // Only values billing_addresses accepts: an unknown province or an over-long
+    // city must not roll back the whole profile save.
+    const billing = pickValidBillingFields({
+        full_name: fullName,
+        address_line1: address,
+        city,
+        province,
+        postal_code: postalCode,
+    });
 
     const updateResult = await client.query(
         `UPDATE billing_addresses
@@ -78,11 +48,11 @@ async function syncDefaultBillingAddress(client, {
             postal_code = COALESCE($5, postal_code)
          WHERE user_id = $6 AND is_default = true`,
         [
-            fullName || null,
-            address || null,
-            city || null,
-            normalizedProvince,
-            normalizedPostalCode,
+            billing.full_name ?? null,
+            billing.address_line1 ?? null,
+            billing.city ?? null,
+            billing.province ?? null,
+            billing.postal_code ?? null,
             userId,
         ]
     );
@@ -91,14 +61,14 @@ async function syncDefaultBillingAddress(client, {
         return;
     }
 
-    if (!address || !city || !normalizedProvince || !normalizedPostalCode) {
+    if (!billing.address_line1 || !billing.city || !billing.province || !billing.postal_code) {
         return;
     }
 
     await client.query(
         `INSERT INTO billing_addresses (user_id, label, full_name, address_line1, city, province, postal_code, is_default)
          VALUES ($1, $2, $3, $4, $5, $6, $7, true)`,
-        [userId, "Domicile", fullName || null, address, city, normalizedProvince, normalizedPostalCode]
+        [userId, "Domicile", billing.full_name ?? null, billing.address_line1, billing.city, billing.province, billing.postal_code]
     );
 }
 

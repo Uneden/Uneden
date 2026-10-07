@@ -10,6 +10,13 @@ const QUALITY = 0.82;
  */
 export const LISTING_MAX_WIDTH = 2000;
 
+/**
+ * Largest photo accepted from the device. The upload is the re-encoded
+ * rendition (≤ 2000 px wide, well under the 5 MB bucket limit), so this only
+ * guards memory: a 5 MB cap here rejected ordinary phone photos.
+ */
+export const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024;
+
 /** Draws a source region onto a canvas, scaling it down to maxWidth, and encodes it. */
 function encodeRegion(
   image: HTMLImageElement,

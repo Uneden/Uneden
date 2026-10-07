@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import AppImage from "@/components/ui/AppImage";
 import type { Area } from "react-easy-crop";
 import ImageCropModal from "@/components/ui/ImageCropModal";
-import getCroppedImg, { getFullImage, LISTING_MAX_WIDTH } from "@/utils/cropImage";
+import getCroppedImg, { getFullImage, LISTING_MAX_WIDTH, MAX_SOURCE_IMAGE_BYTES } from "@/utils/cropImage";
 import {
   uploadListingImage,
   fullListingImageUrl,
@@ -45,7 +45,7 @@ export default function MultiImageUploader({ images, onChange, aspectRatio = 16 
       toast.error(t("post.uploadImageTypeError"));
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
       toast.error(t("post.uploadImageSizeError"));
       return;
     }

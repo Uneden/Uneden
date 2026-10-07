@@ -39,6 +39,12 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# Apply Debian security fixes published since the base image was built
+# (Trivy fails the build on fixable CRITICAL CVEs, e.g. perl-base).
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
 # The standalone output already contains the pruned node_modules + server.js
 COPY --chown=node:node --from=builder /app/public ./public
 COPY --chown=node:node --from=builder /app/.next/standalone ./

@@ -11,11 +11,12 @@ import { processHourlyReconciliation } from "../services/hourlyReconciliationSer
 import { refreshHourlyBalanceDue } from "../services/hourlyBalanceService.js";
 import {
   ensureDepositsAndCalendarSchema,
+  MAX_FIXED_DEPOSIT,
   resolveBookingDepositMeta,
   resolveDepositBaseAmount,
   validateDepositAgainstPrice,
 } from "../utils/depositSchema.js";
-import { normalizePricingMode } from "../utils/servicePricing.js";
+import { normalizePricingMode, MAX_ESTIMATED_HOURS } from "../utils/servicePricing.js";
 import { resolveBookingHourlyRate } from "../utils/hourlyPayment.js";
 import {
   isNegotiablePricingMode,
@@ -210,7 +211,9 @@ export const createBooking = async (req, res) => {
         client_description || null,
         tax_rate,
         clientProvince,
-        Number.isFinite(estimatedHours) && estimatedHours > 0 ? estimatedHours : s.estimated_hours ?? null,
+        Number.isFinite(estimatedHours) && estimatedHours > 0 && estimatedHours <= MAX_ESTIMATED_HOURS
+          ? estimatedHours
+          : s.estimated_hours ?? null,
         s.pricing_mode ?? "fixed",
       ],
     );
@@ -730,7 +733,7 @@ export const customizeBooking = async (req, res) => {
     let estimatedHours = b.estimated_hours;
     if (estimatedHoursRaw !== undefined) {
       const parsed = Number(estimatedHoursRaw);
-      if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1000) {
+      if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_ESTIMATED_HOURS) {
         return res.status(400).json({ message: "Invalid estimated hours" });
       }
       estimatedHours = parsed;
@@ -749,6 +752,7 @@ export const customizeBooking = async (req, res) => {
       const dv = Number(depositValue);
       if (!Number.isFinite(dv) || dv < 0) return res.status(400).json({ message: "Invalid deposit value" });
       if (depositType === "percent" && dv > 100) return res.status(400).json({ message: "Deposit percent cannot exceed 100" });
+      if (depositType !== "percent" && dv > MAX_FIXED_DEPOSIT) return res.status(400).json({ message: "Deposit too high" });
     }
 
     const finalDepositType =
