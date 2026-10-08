@@ -1,6 +1,7 @@
 "use client";
 import { Trans, useTranslation } from "react-i18next";
 import LegalSidebarNav from "@/components/legal/LegalSidebarNav";
+import { openConsentPreferences } from "@/lib/consent";
 
 export default function PrivacyPolicyPage() {
   const { t } = useTranslation();
@@ -13,6 +14,7 @@ export default function PrivacyPolicyPage() {
     { id: "storage", label: t("privacyPolicyPage.sections.storage.title") },
     { id: "location", label: t("privacyPolicyPage.sections.location.title") },
     { id: "third-party", label: t("privacyPolicyPage.sections.thirdParty.title") },
+    { id: "rights", label: t("privacyPolicyPage.sections.rights.title") },
     { id: "changes", label: t("privacyPolicyPage.sections.changes.title") },
     { id: "contact", label: t("privacyPolicyPage.sections.contact.title") },
   ];
@@ -90,6 +92,13 @@ export default function PrivacyPolicyPage() {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+              <button
+                type="button"
+                onClick={openConsentPreferences}
+                className="mt-3 cursor-pointer rounded-lg border border-green-700 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-50"
+              >
+                {t("privacyPolicyPage.sections.infoCollect.cookiesManage")}
+              </button>
             </div>
           </div>
         </section>
@@ -168,6 +177,19 @@ export default function PrivacyPolicyPage() {
             ))}
           </ul>
           <p className="mt-3"><Trans i18nKey="privacyPolicyPage.sections.thirdParty.note" components={{ strong: <span className="font-semibold text-gray-900" /> }} /></p>
+        </section>
+
+        <section id="rights">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            {t("privacyPolicyPage.sections.rights.title")}
+          </h2>
+          <p className="mb-3">{t("privacyPolicyPage.sections.rights.intro")}</p>
+          <ul className="list-disc list-inside space-y-2 text-gray-600 ml-2">
+            {(t("privacyPolicyPage.sections.rights.items", { returnObjects: true }) as string[]).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <p className="mt-3"><Trans i18nKey="privacyPolicyPage.sections.rights.note" components={{ strong: <span className="font-semibold text-gray-900" /> }} /></p>
         </section>
 
         <section id="changes">

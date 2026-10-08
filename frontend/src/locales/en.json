@@ -38,6 +38,7 @@
     "paymentTerms": "Payment Terms",
     "trustSafety": "Trust & Safety",
     "rights": "© {{year}} Uneden. All rights reserved.",
+    "cookiePreferences": "Cookie preferences",
     "help": "Help"
   },
   "home": {
@@ -2521,68 +2522,128 @@
   },
   "privacyPolicyPage": {
     "title": "Privacy Policy",
-    "lastUpdatedLabel": "Last Updated: ",
-    "lastUpdatedValue": "March 2026",
-    "intro": "Uneden (\"we\", \"our\", \"us\") operates a digital platform that connects users with local service providers. This Privacy Policy explains how we <strong>collect</strong>, <strong>use</strong>, <strong>store</strong>, and <strong>share</strong> your personal information.",
+    "lastUpdatedLabel": "Last updated: ",
+    "lastUpdatedValue": "October 2026",
+    "intro": "Uneden (\"we\", \"our\") operates a digital platform that connects users with local service providers in Québec. This policy explains how we <strong>collect</strong>, <strong>use</strong>, <strong>retain</strong> and <strong>share</strong> your personal information, in accordance with Québec's Act respecting the protection of personal information in the private sector (Law 25).",
     "sections": {
       "infoCollect": {
         "title": "1. Information We Collect",
-        "intro": "We may collect the following types of information:",
+        "intro": "We collect the following information:",
         "personalInfoTitle": "a. Personal Information",
-        "personalInfoItems": ["Name, email address, profile information", "Profile photo, biography, service descriptions", "Location data (precise or approximate, based on user choice)"],
-        "accountDataTitle": "b. Account & Authentication Data",
-        "accountDataItems": ["Login credentials", "Third-party login data (Google, Facebook)"],
-        "transactionDataTitle": "c. Transaction & Financial Data",
-        "transactionDataItems": ["Payment information (processed via third-party providers such as Stripe)", "Wallet balances (approved, pending, total)", "Transaction history"],
+        "personalInfoItems": [
+          "Name, email address, phone number and profile information",
+          "Profile photo, bio, portfolio and service descriptions",
+          "Address and location data (precise or approximate, as you choose)"
+        ],
+        "accountDataTitle": "b. Account and Authentication Data",
+        "accountDataItems": [
+          "Login credentials",
+          "Third-party login data if you sign in with Google or Facebook"
+        ],
+        "transactionDataTitle": "c. Transaction and Financial Data",
+        "transactionDataItems": [
+          "Billing address",
+          "Payment information, processed directly by Stripe: we never store your card number",
+          "Wallet balances and transaction history"
+        ],
         "usageDataTitle": "d. Usage Data",
-        "usageDataItems": ["IP address", "Device and browser information", "Pages visited and interactions"],
-        "cookiesTitle": "e. Cookies & Tracking Technologies",
-        "cookiesIntro": "We use cookies and similar technologies to:",
-        "cookiesItems": ["Improve user experience", "Analyze usage", "Power search and recommendation algorithms"]
+        "usageDataItems": [
+          "IP address, used for security and abuse prevention",
+          "Technical information about your device and browser",
+          "Messages exchanged on the platform, bookings, reviews and complaints"
+        ],
+        "cookiesTitle": "e. Cookies and Similar Technologies",
+        "cookiesIntro": "We use cookies and similar technologies (browser local storage) grouped into categories. Optional categories are off by default and only turn on with your consent, which you can withdraw at any time:",
+        "cookiesItems": [
+          "Necessary (always on): signing in to your account, secure payment (Stripe), language and preferences, error detection without personal data (Sentry)",
+          "Statistics (with your consent): anonymous measurement of pages visited and performance (Vercel Analytics, Speed Insights)",
+          "Session recording (with your consent): recording of your browsing, with text and fields masked, to fix errors (Sentry Session Replay)"
+        ],
+        "cookiesManage": "Manage my cookie preferences"
       },
       "howUse": {
         "title": "2. How We Use Your Information",
         "intro": "We use your information to:",
-        "items": ["Provide and operate the platform", "Match users with relevant services", "Process payments and manage wallets", "Send notifications and promotional emails", "Improve our services and algorithms", "Prevent fraud and ensure security"]
+        "items": [
+          "Provide and operate the platform",
+          "Match users with relevant services nearby",
+          "Process payments, refunds and payouts to providers",
+          "Send notifications about your account, bookings and messages",
+          "Send promotional emails, only if you agreed to them",
+          "Improve our services and fix errors",
+          "Prevent fraud and ensure security"
+        ]
       },
       "sharing": {
         "title": "3. Sharing of Information",
-        "intro": "We may share your data with:",
-        "items": ["Payment processors (e.g., Stripe)", "Authentication providers (Google, Facebook)", "Analytics and advertising partners (e.g., Google Ads)", "Legal authorities when required"],
-        "note": "We may also share data with <strong>third parties</strong> for business or operational purposes."
+        "intro": "We only share your information:",
+        "items": [
+          "With other users, as needed to connect you (public profile, listings, messages, bookings)",
+          "With our service providers, who process it on our behalf (see section 7)",
+          "With authorities, when required by law"
+        ],
+        "note": "We do not <strong>sell</strong> your personal information or share it for advertising purposes."
       },
       "emails": {
-        "title": "4. Emails & Communications",
-        "intro": "By using Uneden, you agree to receive:",
-        "items": ["Service-related notifications", "Transaction updates", "Promotional emails"],
-        "note": "You may unsubscribe from promotional emails <strong>at any time</strong>."
+        "title": "4. Emails and Communications",
+        "intro": "By using Uneden, you receive:",
+        "items": [
+          "Notifications about your services, bookings and messages",
+          "Transaction confirmations and receipts",
+          "Promotional emails, only if you turned them on in your settings"
+        ],
+        "note": "You can manage your notifications and unsubscribe from promotional emails <strong>at any time</strong> in your settings."
       },
       "storage": {
-        "title": "5. Data Storage & Security",
-        "intro": "We take reasonable measures to protect your data. However:",
-        "itemOne": "No system is <strong>100% secure</strong>",
+        "title": "5. Data Storage and Security",
+        "intro": "We take reasonable measures to protect your data (encrypted connections, restricted access). However:",
+        "itemOne": "No system is <strong>100%</strong> secure",
         "itemTwo": "You use the platform <strong>at your own risk</strong>",
-        "note": "You may request <strong>deletion of your account and data</strong> by contacting us."
+        "note": "Your information is kept while your account is active or as long as needed for our legal and tax obligations. You can request <strong>deletion of your account and data</strong> by contacting us."
       },
       "location": {
         "title": "6. Location Data",
-        "intro": "Users may choose to:",
-        "items": ["Display precise location", "Display approximate area"],
-        "note": "This information is used for matching nearby services."
+        "intro": "Users can choose to display:",
+        "items": [
+          "Their precise location",
+          "An approximate area"
+        ],
+        "note": "This information is used to match nearby services. Address autocomplete uses Google Maps."
       },
       "thirdParty": {
         "title": "7. Third-Party Services",
-        "intro": "We use third-party services including:",
-        "items": ["Stripe (payments)", "Google / Facebook (authentication)", "Google Ads (advertising)", "Supabase (database & storage)", "Vercel (hosting)"],
-        "note": "These services have their own <strong>privacy policies</strong>."
+        "intro": "We rely on the following providers, who process information on our behalf:",
+        "items": [
+          "Supabase (database, image storage and authentication), hosted in Canada",
+          "Render (hosting of our server)",
+          "Vercel (website hosting and, with your consent, statistics)",
+          "Stripe (payments, refunds and payouts)",
+          "Google (address autocomplete with Google Maps, sign-in with Google)",
+          "Facebook (sign-in with Facebook)",
+          "Sentry (error detection and, with your consent, session recording)",
+          "Resend (sending emails)"
+        ],
+        "note": "Some of these providers process data <strong>outside Québec</strong>, notably in the United States. We make sure they offer adequate protection. These services have their own <strong>privacy policies</strong>."
+      },
+      "rights": {
+        "title": "8. Your Rights",
+        "intro": "At any time, you can:",
+        "items": [
+          "Access the personal information we hold about you",
+          "Have it corrected if it is inaccurate or incomplete",
+          "Request its deletion, subject to our legal obligations",
+          "Withdraw your consent, including to optional cookies",
+          "Receive your information in a structured, commonly used technological format"
+        ],
+        "note": "To exercise these rights, write to us at the address in section 10. We reply within <strong>30 days</strong>. You may also file a complaint with the Commission d'accès à l'information du Québec."
       },
       "changes": {
-        "title": "8. Changes to This Policy",
-        "paragraph": "We reserve the right to modify this Privacy Policy <strong>at any time</strong>, <strong>without prior notice</strong>. We encourage you to review this page periodically to stay informed of any updates."
+        "title": "9. Changes to This Policy",
+        "paragraph": "We may update this policy. The date of the last update appears at the top of this page and we will inform you of <strong>significant changes</strong>, for example by email or a notice on the platform."
       },
       "contact": {
-        "title": "9. Contact",
-        "intro": "For any questions regarding this policy, contact us:",
+        "title": "10. Contact",
+        "intro": "For any question about this policy or your personal information, contact Uneden's person in charge of the protection of personal information:",
         "address": ""
       }
     }
@@ -2990,5 +3051,35 @@
     "more": "More",
     "clear": "Clear",
     "unknown": "Unknown"
+  },
+  "cookieConsent": {
+    "title": "Your privacy",
+    "body": "We use cookies the site needs to work (sign-in, payment, preferences). With your consent, we also measure how it is used and record sessions to fix errors. You can change this anytime from the footer.",
+    "privacyLink": "Privacy policy",
+    "acceptAll": "Accept all",
+    "refuseAll": "Reject all",
+    "customize": "Customize",
+    "save": "Save",
+    "preferencesTitle": "Cookie preferences",
+    "preferencesIntro": "Choose the categories you accept. Optional categories stay off until you turn them on.",
+    "alwaysOn": "Always on",
+    "categories": {
+      "necessary": {
+        "title": "Necessary",
+        "description": "Required for the site: signing in to your account, secure payment (Stripe), language and preferences, error detection without personal data."
+      },
+      "statistics": {
+        "title": "Statistics",
+        "description": "Anonymous measurement of pages visited and site performance (Vercel Analytics and Speed Insights), no advertising cookies."
+      },
+      "sessionReplay": {
+        "title": "Session recording",
+        "description": "Records your browsing on the site (text and fields masked) to help us understand and fix errors (Sentry Session Replay)."
+      },
+      "advertising": {
+        "title": "Advertising",
+        "description": "Shows ads, possibly personalised, through Google AdSense."
+      }
+    }
   }
 }

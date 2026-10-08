@@ -10,13 +10,16 @@ Sentry.init({
   // No telemetry in dev — avoids noisy "/monitoring" proxy errors (ECONNRESET) in the terminal.
   enabled: process.env.NODE_ENV === "production",
 
-  integrations: [Sentry.replayIntegration()],
-
+  // Session Replay records what visitors do: it is only added once they
+  // consent (components/consent/ConsentGatedServices.tsx). These rates apply
+  // from then on.
   tracesSampleRate: 0.1,
   enableLogs: true,
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
-  sendDefaultPii: true,
+  // Error monitoring runs without consent, so it must not collect personal
+  // data (IP address, cookies, headers).
+  sendDefaultPii: false,
 
   beforeSend(event, hint) {
     const error = hint?.originalException;

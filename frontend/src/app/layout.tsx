@@ -9,8 +9,8 @@ import LogoutOverlay from "@/components/LogoutOverlay";
 import { AuthBootstrapOverlay } from "@/components/auth/AuthBootstrapOverlay";
 import ComingSoonOverlay from "@/components/ComingSoonOverlay";
 import AppToaster from "@/components/AppToaster";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Analytics } from "@vercel/analytics/react";
+import CookieConsent from "@/components/consent/CookieConsent";
+import ConsentGatedServices from "@/components/consent/ConsentGatedServices";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -91,7 +91,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* AdSense — disabled until approved; re-enable the Script tag below
+        {/* AdSense — disabled until approved. To re-enable: render this Script
+            only when hasConsent("advertising") (see lib/consent.ts), and show
+            the advertising category there.
         <Script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1987537963844035"
@@ -151,8 +153,9 @@ export default function RootLayout({
           <LogoutOverlay />
           <AuthBootstrapOverlay />
           <AppToaster />
-          <SpeedInsights />
-          <Analytics />
+          {/* Analytics, Speed Insights and Session Replay only after consent */}
+          <ConsentGatedServices />
+          <CookieConsent />
           </AuthGateProvider>
         </AuthProvider>
       </body>

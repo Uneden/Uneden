@@ -38,6 +38,7 @@
     "paymentTerms": "Conditions de paiement",
     "trustSafety": "Confiance et sécurité",
     "rights": "© {{year}} Uneden. Tous droits réservés.",
+    "cookiePreferences": "Préférences de cookies",
     "help": "Aide"
   },
   "home": {
@@ -2292,67 +2293,127 @@
   "privacyPolicyPage": {
     "title": "Politique de confidentialité",
     "lastUpdatedLabel": "Dernière mise à jour : ",
-    "lastUpdatedValue": "Mars 2026",
-    "intro": "Uneden (« nous », « notre ») exploite une plateforme numérique qui met en relation les utilisateurs avec des prestataires de services locaux. Cette politique de confidentialité explique comment nous <strong>collectons</strong>, <strong>utilisons</strong>, <strong>stockons</strong> et <strong>partageons</strong> vos informations personnelles.",
+    "lastUpdatedValue": "Octobre 2026",
+    "intro": "Uneden (« nous », « notre ») exploite une plateforme numérique qui met en relation les utilisateurs avec des prestataires de services locaux au Québec. Cette politique explique comment nous <strong>collectons</strong>, <strong>utilisons</strong>, <strong>conservons</strong> et <strong>communiquons</strong> vos renseignements personnels, conformément à la Loi sur la protection des renseignements personnels dans le secteur privé (Loi 25).",
     "sections": {
       "infoCollect": {
         "title": "1. Informations collectées",
-        "intro": "Nous pouvons collecter les types d'informations suivants :",
+        "intro": "Nous collectons les renseignements suivants :",
         "personalInfoTitle": "a. Informations personnelles",
-        "personalInfoItems": ["Nom, adresse e-mail, informations de profil", "Photo de profil, biographie, descriptions de services", "Données de localisation (précises ou approximatives, selon le choix de l'utilisateur)"],
+        "personalInfoItems": [
+          "Nom, adresse e-mail, numéro de téléphone et informations de profil",
+          "Photo de profil, biographie, portfolio et descriptions de services",
+          "Adresse et données de localisation (précises ou approximatives, selon votre choix)"
+        ],
         "accountDataTitle": "b. Données de compte et d'authentification",
-        "accountDataItems": ["Identifiants de connexion", "Données de connexion tierces (Google, Facebook)"],
+        "accountDataItems": [
+          "Identifiants de connexion",
+          "Données de connexion tierces si vous utilisez Google ou Facebook pour vous connecter"
+        ],
         "transactionDataTitle": "c. Données de transaction et financières",
-        "transactionDataItems": ["Informations de paiement (traitées par des tiers comme Stripe)", "Soldes du portefeuille (approuvé, en attente, total)", "Historique des transactions"],
+        "transactionDataItems": [
+          "Adresse de facturation",
+          "Informations de paiement, traitées directement par Stripe : nous ne conservons jamais votre numéro de carte",
+          "Soldes du portefeuille et historique des transactions"
+        ],
         "usageDataTitle": "d. Données d'utilisation",
-        "usageDataItems": ["Adresse IP", "Informations sur l'appareil et le navigateur", "Pages visitées et interactions"],
-        "cookiesTitle": "e. Cookies et technologies de suivi",
-        "cookiesIntro": "Nous utilisons des cookies et technologies similaires pour :",
-        "cookiesItems": ["Améliorer l'expérience utilisateur", "Analyser l'utilisation", "Alimenter les algorithmes de recherche et de recommandation"]
+        "usageDataItems": [
+          "Adresse IP, utilisée pour la sécurité et la prévention des abus",
+          "Informations techniques sur l'appareil et le navigateur",
+          "Messages échangés sur la plateforme, réservations, avis et plaintes"
+        ],
+        "cookiesTitle": "e. Cookies et technologies similaires",
+        "cookiesIntro": "Nous utilisons des cookies et technologies similaires (stockage local du navigateur) répartis en catégories. Les catégories optionnelles sont désactivées par défaut et ne s'activent qu'avec votre consentement, que vous pouvez retirer à tout moment :",
+        "cookiesItems": [
+          "Nécessaires (toujours actifs) : connexion à votre compte, paiement sécurisé (Stripe), langue et préférences, détection des erreurs sans données personnelles (Sentry)",
+          "Statistiques (avec votre consentement) : mesure anonyme des pages visitées et des performances (Vercel Analytics, Speed Insights)",
+          "Enregistrement de session (avec votre consentement) : enregistrement de la navigation, textes et champs masqués, pour corriger les erreurs (Sentry Session Replay)"
+        ],
+        "cookiesManage": "Gérer mes préférences de cookies"
       },
       "howUse": {
         "title": "2. Utilisation de vos informations",
         "intro": "Nous utilisons vos informations pour :",
-        "items": ["Fournir et exploiter la plateforme", "Mettre en relation les utilisateurs avec des services pertinents", "Traiter les paiements et gérer les portefeuilles", "Envoyer des notifications et des e-mails promotionnels", "Améliorer nos services et algorithmes", "Prévenir la fraude et assurer la sécurité"]
+        "items": [
+          "Fournir et exploiter la plateforme",
+          "Mettre en relation les utilisateurs avec des services pertinents à proximité",
+          "Traiter les paiements, les remboursements et les versements aux prestataires",
+          "Envoyer les notifications liées à votre compte, vos réservations et vos messages",
+          "Envoyer des e-mails promotionnels, uniquement si vous l'avez accepté",
+          "Améliorer nos services et corriger les erreurs",
+          "Prévenir la fraude et assurer la sécurité"
+        ]
       },
       "sharing": {
         "title": "3. Partage des informations",
-        "intro": "Nous pouvons partager vos données avec :",
-        "items": ["Processeurs de paiement (ex. : Stripe)", "Fournisseurs d'authentification (Google, Facebook)", "Partenaires d'analyse et de publicité (ex. : Google Ads)", "Autorités légales si requis"],
-        "note": "Nous pouvons également partager des données avec des <strong>tiers</strong> à des fins commerciales ou opérationnelles."
+        "intro": "Nous communiquons vos renseignements uniquement :",
+        "items": [
+          "Aux autres utilisateurs, dans la mesure nécessaire à une mise en relation (profil public, annonces, messages, réservations)",
+          "À nos fournisseurs de services, qui les traitent pour notre compte (voir la section 7)",
+          "Aux autorités, lorsque la loi l'exige"
+        ],
+        "note": "Nous ne <strong>vendons</strong> pas vos renseignements personnels et ne les communiquons pas à des fins publicitaires."
       },
       "emails": {
         "title": "4. Emails et communications",
-        "intro": "En utilisant Uneden, vous acceptez de recevoir :",
-        "items": ["Notifications liées aux services", "Mises à jour des transactions", "E-mails promotionnels"],
-        "note": "Vous pouvez vous désabonner des e-mails promotionnels <strong>à tout moment</strong>."
+        "intro": "En utilisant Uneden, vous recevez :",
+        "items": [
+          "Les notifications liées à vos services, réservations et messages",
+          "Les confirmations et reçus de transactions",
+          "Des e-mails promotionnels, seulement si vous les avez activés dans vos paramètres"
+        ],
+        "note": "Vous pouvez gérer vos notifications et vous désabonner des e-mails promotionnels <strong>à tout moment</strong> depuis vos paramètres."
       },
       "storage": {
         "title": "5. Stockage et sécurité des données",
-        "intro": "Nous prenons des mesures raisonnables pour protéger vos données. Cependant :",
+        "intro": "Nous prenons des mesures raisonnables pour protéger vos données (chiffrement des connexions, accès restreints). Cependant :",
         "itemOne": "Aucun système n'est sécurisé à <strong>100 %</strong>",
         "itemTwo": "Vous utilisez la plateforme <strong>à vos propres risques</strong>",
-        "note": "Vous pouvez demander la <strong>suppression de votre compte et de vos données</strong> en nous contactant."
+        "note": "Vos renseignements sont conservés tant que votre compte est actif ou aussi longtemps que nécessaire à nos obligations légales et fiscales. Vous pouvez demander la <strong>suppression de votre compte et de vos données</strong> en nous contactant."
       },
       "location": {
         "title": "6. Données de localisation",
         "intro": "Les utilisateurs peuvent choisir d'afficher :",
-        "items": ["Leur localisation précise", "Une zone approximative"],
-        "note": "Ces informations sont utilisées pour mettre en relation les services à proximité."
+        "items": [
+          "Leur localisation précise",
+          "Une zone approximative"
+        ],
+        "note": "Ces informations servent à mettre en relation les services à proximité. L'autocomplétion des adresses utilise Google Maps."
       },
       "thirdParty": {
         "title": "7. Services tiers",
-        "intro": "Nous utilisons des services tiers notamment :",
-        "items": ["Stripe (paiements)", "Google / Facebook (authentification)", "Google Ads (publicité)", "Supabase (base de données et stockage)", "Vercel (hébergement)"],
-        "note": "Ces services ont leurs propres <strong>politiques de confidentialité</strong>."
+        "intro": "Nous faisons appel aux fournisseurs suivants, qui traitent des renseignements pour notre compte :",
+        "items": [
+          "Supabase (base de données, stockage des images et authentification), hébergé au Canada",
+          "Render (hébergement de notre serveur)",
+          "Vercel (hébergement du site et, avec votre consentement, statistiques)",
+          "Stripe (paiements, remboursements et versements)",
+          "Google (autocomplétion des adresses avec Google Maps, connexion avec Google)",
+          "Facebook (connexion avec Facebook)",
+          "Sentry (détection des erreurs et, avec votre consentement, enregistrement de session)",
+          "Resend (envoi des e-mails)"
+        ],
+        "note": "Certains de ces fournisseurs traitent des données <strong>à l'extérieur du Québec</strong>, notamment aux États-Unis. Nous nous assurons qu'ils offrent une protection adéquate. Ces services ont leurs propres <strong>politiques de confidentialité</strong>."
+      },
+      "rights": {
+        "title": "8. Vos droits",
+        "intro": "Vous pouvez à tout moment :",
+        "items": [
+          "Accéder aux renseignements personnels que nous détenons sur vous",
+          "Les faire rectifier s'ils sont inexacts ou incomplets",
+          "Demander leur suppression, sous réserve de nos obligations légales",
+          "Retirer votre consentement, notamment aux cookies optionnels",
+          "Obtenir vos renseignements dans un format technologique structuré et couramment utilisé"
+        ],
+        "note": "Pour exercer ces droits, écrivez-nous à l'adresse indiquée à la section 10. Nous répondons dans un délai de <strong>30 jours</strong>. Vous pouvez aussi porter plainte auprès de la Commission d'accès à l'information du Québec."
       },
       "changes": {
-        "title": "8. Modifications de cette politique",
-        "paragraph": "Nous nous réservons le droit de modifier cette politique de confidentialité <strong>à tout moment</strong>, <strong>sans préavis</strong>. Nous vous encourageons à consulter régulièrement cette page pour rester informé des mises à jour."
+        "title": "9. Modifications de cette politique",
+        "paragraph": "Nous pouvons modifier cette politique. La date de mise à jour figure en haut de cette page et nous vous informerons des <strong>changements importants</strong>, par exemple par e-mail ou par un avis sur la plateforme."
       },
       "contact": {
-        "title": "9. Contact",
-        "intro": "Pour toute question concernant cette politique, contactez-nous :",
+        "title": "10. Contact",
+        "intro": "Pour toute question concernant cette politique ou vos renseignements personnels, contactez le responsable de la protection des renseignements personnels d'Uneden :",
         "address": ""
       }
     }
@@ -2985,5 +3046,35 @@
     "scheduleSidePending": "En attente",
     "selectedDayKept": "Jour sélectionné",
     "dayPage": "Page {{page}}"
+  },
+  "cookieConsent": {
+    "title": "Votre vie privée",
+    "body": "Nous utilisons des cookies nécessaires au fonctionnement du site (connexion, paiement, préférences). Avec votre accord, nous mesurons aussi son utilisation et enregistrons des sessions pour corriger les erreurs. Modifiable à tout moment dans le pied de page.",
+    "privacyLink": "Politique de confidentialité",
+    "acceptAll": "Tout accepter",
+    "refuseAll": "Tout refuser",
+    "customize": "Personnaliser",
+    "save": "Enregistrer",
+    "preferencesTitle": "Préférences de cookies",
+    "preferencesIntro": "Choisissez les catégories que vous acceptez. Les catégories optionnelles sont désactivées tant que vous ne les activez pas.",
+    "alwaysOn": "Toujours actifs",
+    "categories": {
+      "necessary": {
+        "title": "Nécessaires",
+        "description": "Indispensables au site : connexion à votre compte, paiement sécurisé (Stripe), langue et préférences, détection des erreurs sans données personnelles."
+      },
+      "statistics": {
+        "title": "Statistiques",
+        "description": "Mesure anonyme des pages visitées et des performances du site (Vercel Analytics et Speed Insights), sans cookie publicitaire."
+      },
+      "sessionReplay": {
+        "title": "Enregistrement de session",
+        "description": "Enregistre votre navigation sur le site (textes et champs masqués) pour nous aider à comprendre et corriger les erreurs (Sentry Session Replay)."
+      },
+      "advertising": {
+        "title": "Publicité",
+        "description": "Affiche des publicités, éventuellement personnalisées, par Google AdSense."
+      }
+    }
   }
 }
