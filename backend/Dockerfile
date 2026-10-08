@@ -8,7 +8,7 @@ WORKDIR /app
 # Only copy the manifests so this layer is cached until deps change
 COPY package.json package-lock.json ./
 
-# Reproducible install, dev deps (nodemon, vitest) excluded
+# Reproducible install, dev deps (vitest) excluded
 RUN npm ci --omit=dev
 
 # ---------- Stage 2: minimal runtime image ----------

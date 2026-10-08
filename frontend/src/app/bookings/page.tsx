@@ -20,6 +20,7 @@ import AppImage from "@/components/ui/AppImage";
 import { getBookingDisputeFinancialOutcome } from "@/lib/disputeFinancials";
 import { getIntlLocale } from "@/lib/locale";
 import { toast } from "sonner";
+import { bookingStatusErrorMessage } from "@/lib/bookingStatusError";
 import { isWorkBasedPricingMode, hasUnpaidBalanceDue } from "@/lib/hourlyPayment";
 import { normalizePricingMode } from "@/lib/listingPrice";
 import { cn } from "@/lib/utils";
@@ -394,14 +395,21 @@ function BookingsContent() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        toast.error(bookingStatusErrorMessage(res.status, body, t));
+        if (res.status === 409) fetchBookings();
+        return;
+      }
       const updated = await res.json();
       if (side === "received") {
         setReceived((prev) => prev.map((b) => (b.id === bookingId ? { ...b, ...updated } : b)));
       } else {
         setSent((prev) => prev.map((b) => (b.id === bookingId ? { ...b, ...updated } : b)));
       }
-    } catch { /* silent */ } finally {
+    } catch {
+      toast.error(t("bookings.statusChangeFailed"));
+    } finally {
       setUpdating(null);
     }
   };

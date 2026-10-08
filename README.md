@@ -80,7 +80,7 @@ Requires Node 24. Changes reload instantly; the Docker images are for running an
 
 ```bash
 # terminal 1
-cd backend && npm ci && npm run dev      # nodemon on :5000
+cd backend && npm ci && npm run dev      # node --watch on :5000
 
 # terminal 2
 cd frontend && npm ci && npm run dev     # next dev on :3000
