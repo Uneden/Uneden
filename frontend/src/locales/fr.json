@@ -38,6 +38,7 @@
     "paymentTerms": "Conditions de paiement",
     "trustSafety": "Confiance et sécurité",
     "rights": "© {{year}} Uneden. Tous droits réservés.",
+    "cookiePreferences": "Préférences de cookies",
     "help": "Aide"
   },
   "home": {
@@ -2985,5 +2986,35 @@
     "scheduleSidePending": "En attente",
     "selectedDayKept": "Jour sélectionné",
     "dayPage": "Page {{page}}"
+  },
+  "cookieConsent": {
+    "title": "Votre vie privée",
+    "body": "Nous utilisons des cookies nécessaires au fonctionnement du site (connexion, paiement, préférences). Avec votre accord, nous mesurons aussi son utilisation et enregistrons des sessions pour corriger les erreurs. Modifiable à tout moment dans le pied de page.",
+    "privacyLink": "Politique de confidentialité",
+    "acceptAll": "Tout accepter",
+    "refuseAll": "Tout refuser",
+    "customize": "Personnaliser",
+    "save": "Enregistrer",
+    "preferencesTitle": "Préférences de cookies",
+    "preferencesIntro": "Choisissez les catégories que vous acceptez. Les catégories optionnelles sont désactivées tant que vous ne les activez pas.",
+    "alwaysOn": "Toujours actifs",
+    "categories": {
+      "necessary": {
+        "title": "Nécessaires",
+        "description": "Indispensables au site : connexion à votre compte, paiement sécurisé (Stripe), langue et préférences, détection des erreurs sans données personnelles."
+      },
+      "statistics": {
+        "title": "Statistiques",
+        "description": "Mesure anonyme des pages visitées et des performances du site (Vercel Analytics et Speed Insights), sans cookie publicitaire."
+      },
+      "sessionReplay": {
+        "title": "Enregistrement de session",
+        "description": "Enregistre votre navigation sur le site (textes et champs masqués) pour nous aider à comprendre et corriger les erreurs (Sentry Session Replay)."
+      },
+      "advertising": {
+        "title": "Publicité",
+        "description": "Affiche des publicités, éventuellement personnalisées, par Google AdSense."
+      }
+    }
   }
 }

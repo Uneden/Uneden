@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { getLanguageToggleValue } from "@/lib/locale";
 import { cn } from "@/lib/utils";
+import { openConsentPreferences } from "@/lib/consent";
 
 const FLUSH_FOOTER_ROUTES = [
   "/help",
@@ -51,6 +52,7 @@ export default function Footer() {
             <a href="/terms" className="whitespace-nowrap hover:text-white transition-colors cursor-pointer">{t("footer.termsOfUse")}</a>
             <a href="/payment-terms" className="whitespace-nowrap hover:text-white transition-colors cursor-pointer">{t("footer.paymentTerms")}</a>
             <a href="/trust-safety" className="whitespace-nowrap hover:text-white transition-colors cursor-pointer">{t("footer.trustSafety")}</a>
+            <button type="button" onClick={openConsentPreferences} className="whitespace-nowrap hover:text-white transition-colors cursor-pointer">{t("footer.cookiePreferences")}</button>
           </nav>
 
           {/* Toggle langue */}

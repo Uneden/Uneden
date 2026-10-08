@@ -1,6 +1,7 @@
 "use client";
 // AdSense banner — disabled until Google AdSense approval.
-// To re-enable: remove the "return null" line below and uncomment the AdSense Script in layout.tsx.
+// To re-enable: remove the "return null" line below and uncomment the AdSense Script in layout.tsx,
+// and render ads only when the visitor consented (useConsent(): choices.advertising).
 
 interface AdBannerProps {
   slot: string;

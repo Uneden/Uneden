@@ -38,6 +38,7 @@
     "paymentTerms": "Payment Terms",
     "trustSafety": "Trust & Safety",
     "rights": "© {{year}} Uneden. All rights reserved.",
+    "cookiePreferences": "Cookie preferences",
     "help": "Help"
   },
   "home": {
@@ -2990,5 +2991,35 @@
     "more": "More",
     "clear": "Clear",
     "unknown": "Unknown"
+  },
+  "cookieConsent": {
+    "title": "Your privacy",
+    "body": "We use cookies the site needs to work (sign-in, payment, preferences). With your consent, we also measure how it is used and record sessions to fix errors. You can change this anytime from the footer.",
+    "privacyLink": "Privacy policy",
+    "acceptAll": "Accept all",
+    "refuseAll": "Reject all",
+    "customize": "Customize",
+    "save": "Save",
+    "preferencesTitle": "Cookie preferences",
+    "preferencesIntro": "Choose the categories you accept. Optional categories stay off until you turn them on.",
+    "alwaysOn": "Always on",
+    "categories": {
+      "necessary": {
+        "title": "Necessary",
+        "description": "Required for the site: signing in to your account, secure payment (Stripe), language and preferences, error detection without personal data."
+      },
+      "statistics": {
+        "title": "Statistics",
+        "description": "Anonymous measurement of pages visited and site performance (Vercel Analytics and Speed Insights), no advertising cookies."
+      },
+      "sessionReplay": {
+        "title": "Session recording",
+        "description": "Records your browsing on the site (text and fields masked) to help us understand and fix errors (Sentry Session Replay)."
+      },
+      "advertising": {
+        "title": "Advertising",
+        "description": "Shows ads, possibly personalised, through Google AdSense."
+      }
+    }
   }
 }
